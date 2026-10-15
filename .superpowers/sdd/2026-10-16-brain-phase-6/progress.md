@@ -33,3 +33,10 @@ Task 1: Ruling: sync is ADMIN-triggered via POST body (repos list per call) inst
 Task 1: gotcha: event ids must match /^[A-Za-z0-9_-]{1,64}$/ — repo slugs with dots/slashes get sanitized (`gh-{slug}-c-{sha12}`); sha truncated to 12.
 Task 1: per-repo errors never fail the batch; a fully failed sync returns 502 so the operator sees it, partial success 200 with per-repo error entries.
 Task 1: complete (commits ac84e30..700809a, tests: npx vitest run →    Duration  29.18s (transform 3.08s, setup 37.10s, import 5.55s, tests 20.29s, environment 5ms))
+
+Task 2: Ruling: new route need `link` — the export download authenticates via the URL's HMAC-signed exp+token only (no bearer; browsers can't send one on navigation). The index.ts loop short-circuits `link` routes before requireScope and passes a placeholder scope ("MCP_READ"); exactly one route uses it, reviewable in one line.
+Task 2: gotcha: R2 `list()` results do NOT surface customMetadata in the local runtime (test caught it). Retention/profile therefore live in an explicit sidecar `exports/{job}/meta.json` {profile, exp, exported_at, parts}; download and the sweep read that, never list metadata.
+Task 2: format pinned: parts `exports/{job}/NNN.ndjson`, ~4 MiB per part, line grammar {kind:header,...} then {table,rows:<=500} chunks; payload blobs ride as {table:"r2_payloads", rows:[{key, b64}]}; sort order for download/restore = lexicographic key order (NNN padded).
+Task 2: NDJSON round-trip test proves a backup artifact decrypts with the KEK alone (wrapped_key + b64 blob + decryptPayload) — the clean-account contract, later re-asserted post-restore in T4.
+Task 2: interim state: profile=portable returns 501 until T3 lands the confirm-token + retention work (no test depended on it in T2).
+Task 2: complete (commits 94894ef..266b5a0, tests: npx vitest run →    Duration  30.37s (transform 3.14s, setup 38.27s, import 5.58s, tests 21.32s, environment 8ms))
