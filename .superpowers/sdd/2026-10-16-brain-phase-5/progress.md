@@ -29,3 +29,9 @@ Task 1: Ruling: versioning is append-only; a deprecated target refuses new versi
 Task 1: The old Phase-3 placeholder test in test/review.test.ts ("unsupported until Phase 5") was replaced with the real promotion assertion — expected change, not a regression workaround.
 Task 1: module cycle note: procedures.ts ↔ review.ts import each other (ReviewError / promoteProcedureProposal); safe like the existing proposals↔review cycle because usages are call-time only.
 Task 1: complete (commits de88827..0bd3ffa, tests: npx vitest run →    Duration  28.17s (transform 3.05s, setup 34.85s, import 5.27s, tests 19.90s, environment 8ms))
+
+Task 2: Ruling: approve route status mapping — not_found→404, conflict→409, else 400 (dedicated mapping in procedures.ts; the generic proposal-review mapping keeps conflict→400 for apply, which is fine because the apply refusals there are payload-level).
+Task 2: Ruling: audit action for the gate is `approve_procedure` (distinct from the promotion audits action `approve`/target procedure); actor `user`.
+Task 2: Ruling: apply of an external-evidence procedure proposal through the generic REST route surfaces 400 `untrusted_origin` automatically via the existing ReviewError mapping.
+Task 2: gotcha: shared-DB test files accumulate state — name-matching versioning means test procedures must use unique names per test or later applies silently target earlier (possibly deprecated) rows.
+Task 2: complete (commits 5db9b1d..481822e, tests: npx vitest run →    Duration  28.00s (transform 3.04s, setup 34.74s, import 5.27s, tests 20.04s, environment 7ms))
