@@ -1,7 +1,38 @@
-import type { Env } from "./env";
+import type { Env, Need, Scope } from "./env";
+import { resolveScope, requireScope } from "./auth";
+import { json } from "./http";
+import { healthReport } from "./health";
+
+export type Handler = (
+  request: Request,
+  env: Env,
+  scope: Scope,
+  ctx: ExecutionContext,
+  match: RegExpExecArray,
+) => Promise<Response>;
+
+const ROUTES: Array<{ method: string; re: RegExp; need: Need; handler: Handler }> = [
+  {
+    method: "GET",
+    re: /^\/v1\/health-report$/,
+    need: "read",
+    handler: async (_r, env) => json(await healthReport(env)),
+  },
+];
 
 export default {
-  async fetch(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    const { pathname } = new URL(request.url);
+    for (const route of ROUTES) {
+      if (route.method !== request.method) continue;
+      const match = route.re.exec(pathname);
+      if (!match) continue;
+      const denied = requireScope(request, env, route.need);
+      if (denied) return denied;
+      const scope = resolveScope(request, env);
+      if (!scope) return new Response("unauthorized", { status: 401 });
+      return route.handler(request, env, scope, ctx, match);
+    }
     return new Response("not found", { status: 404 });
   },
 } satisfies ExportedHandler<Env>;
