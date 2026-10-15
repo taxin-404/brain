@@ -1,0 +1,109 @@
+[
+  {
+    "name": "supersession",
+    "setup": {
+      "fact": {
+        "subject": "forget-eval-super",
+        "predicate": "is_called",
+        "object": "old codename",
+        "kind": "observed",
+        "confidence": 0.5,
+        "sensitivity": "normal"
+      }
+    },
+    "action": { "type": "correct", "correction": "new codename", "query": "codename" },
+    "expect": {
+      "why_versions": 2,
+      "search_hits": ["new codename"],
+      "search_misses": ["old codename"]
+    }
+  },
+  {
+    "name": "drift",
+    "setup": {
+      "facts": [
+        {
+          "subject": "forget-eval-drift",
+          "predicate": "uses",
+          "object": "prisma",
+          "kind": "observed",
+          "confidence": 0.5,
+          "sensitivity": "normal"
+        },
+        {
+          "subject": "forget-eval-drift",
+          "predicate": "uses",
+          "object": "drizzle",
+          "kind": "observed",
+          "confidence": 0.5,
+          "sensitivity": "normal"
+        }
+      ]
+    },
+    "action": { "type": "none", "query": "orm" },
+    "expect": {
+      "active_objects": ["drizzle", "prisma"],
+      "search_hits": ["drizzle", "prisma"]
+    }
+  },
+  {
+    "name": "dispute",
+    "setup": {
+      "fact": {
+        "subject": "forget-eval-dispute",
+        "predicate": "has_status",
+        "object": "claimed live",
+        "kind": "observed",
+        "confidence": 0.5,
+        "sensitivity": "normal"
+      }
+    },
+    "action": { "type": "dispute", "query": "claimed live" },
+    "expect": {
+      "status": "disputed",
+      "vec_id": null,
+      "search_misses": ["claimed live"]
+    }
+  },
+  {
+    "name": "purge",
+    "setup": {
+      "fact": {
+        "subject": "forget-eval-purge",
+        "predicate": "contains",
+        "object": "zorblaxcodeword",
+        "kind": "observed",
+        "confidence": 0.5,
+        "sensitivity": "normal"
+      }
+    },
+    "action": { "type": "purge", "query": "zorblaxcodeword", "reason": "forget eval" },
+    "expect": {
+      "object_text": null,
+      "status": "deleted",
+      "fts_rows": 0,
+      "vector_removed": true,
+      "search_misses": ["zorblaxcodeword"]
+    }
+  },
+  {
+    "name": "restricted",
+    "setup": {
+      "fact": {
+        "subject": "forget-eval-restricted",
+        "predicate": "is_called",
+        "object": "secret project",
+        "kind": "observed",
+        "confidence": 0.5,
+        "sensitivity": "restricted"
+      }
+    },
+    "action": { "type": "none", "query": "secret project" },
+    "expect": {
+      "read_scope": 404,
+      "admin_scope": 200,
+      "search_misses": ["secret project"],
+      "admin_search_hits": ["secret project"]
+    }
+  }
+]

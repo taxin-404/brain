@@ -3,10 +3,12 @@
 Personal neural memory for OpenCode sessions — capture, redact, encrypt at rest,
 search, and recall into future sessions. Runs on Cloudflare Workers (D1 + R2).
 
-**Status: Phase 0 delivered & live · Phase 1 complete · Phase 2 (semantic) complete** — the
-memory layer now extracts durable facts through the AI Gateway, blends semantic + keyword
-search, and lands reviewable proposals: 20 test files / 113 tests green offline (zero network);
-live acceptance runs single-shot post-merge. Capture and MCP recall are registered globally in
+**Status: Phase 0 delivered & live · Phase 1 complete · Phase 2 (semantic) complete · Phase 3 (truth) complete** — the
+memory layer extracts durable facts through the AI Gateway, blends semantic + keyword
+search, lands reviewable proposals, and applies them through a reversible review engine
+(supersession + provenance + confirm-gated forgets): 27 test files / 168 tests green
+offline (zero network); live acceptance runs single-shot post-merge. Capture and MCP
+recall are registered globally in
 the owner's OpenCode config and proven live end-to-end (owner-approved 2026-10-15; see
 `.superpowers/sdd/2026-10-15-brain-phase-0-1/task-14-log.md`).
 
@@ -63,13 +65,56 @@ Gateway and stores facts with bi-temporal bookkeeping, entities, and provenance.
   30 min plus embedding batches ≤100 facts); never loop against the deployed
   worker — see the rules above.
 
+## Phase 3 (truth)
+
+Reviewing a proposal now applies it for real: one engine serves the REST
+surface and the auto tier, every write is audited, and the reversible ones can
+be undone.
+
+- **Review engine:** proposals remain the only path to corrections, disputes,
+  forgets and block edits. Corrections auto-apply only when the evidence is an
+  `actor=user` event and the fact is not sensitive; disputes auto-apply only for
+  normal-sensitivity facts; everything else is manual. Auto-applied rows apply
+  at creation (`actor=system`) and stay undoable.
+- **Supersession:** a correction inserts a new `user_stated` 0.9 fact
+  (sensitivity inherited, evidence carried, old sources copied) and
+  soft-supersedes the old one — `status='superseded'`, `invalid_at`,
+  `superseded_by` set, text + FTS row kept for provenance. `undo` restores the
+  old fact and archives the replacement; the replacement can still re-embed
+  through the normal sweep if needed.
+- **Forget:** hard and irreversible, gated by a single-use confirm token minted
+  for `fact:{id}` / `event:{id}`. Fact purge nulls `object_text`, deletes the
+  FTS row and the vector, closes edges; event purge is the crypto-shred flow.
+  Disputes mark `status='disputed'` (never embedded, never searched).
+- **Contradiction handling (deterministic, no LLM):** multivalued predicates
+  never conflict; a `user_stated` new supersedes conflicting actives; a
+  non-user fact contradicting a `user_stated` old (or hitting an exclusive
+  predicate) inserts `disputed`; unknown predicates coexist. Runs report
+  `superseded` / `disputed` counters.
+- **Routes:** `POST /v1/facts/:id/{correct|dispute|purge}` →
+  `{proposal_id, review_mode, applied}`; `POST /v1/proposals/:id/{apply|discard|undo}`
+  (apply of a forget needs the confirm token); `GET /v1/why/:id` (read) →
+  fact + full version chain (both directions; purged versions keep `object:null`)
+  + sources (`purged` flag; restricted-privacy excerpts masked for non-admin);
+  `GET /v1/entities/:id` (read) → entity with direction-relative edges. The
+  proposal listing hides restricted rows from non-admin scopes.
+- **Evals:** `test/eval-forget.test.ts` gates the five forget semantics
+  (supersession / drift / dispute / purge / restricted) with cosine-1.0 fake
+  vectors — a miss can only mean the forgetting worked, never weak similarity.
+- **Ops:** no new migrations (schema complete since 0001–0005) and no new
+  secrets; MCP still only proposes — applying stays on the Bearer HTTP API.
+
 ## Read-first map
 
 | Doc | What it is |
 | --- | --- |
 | [`docs/design-v1.2.md`](docs/design-v1.2.md) | Approved design spec — authority for behavior, SQL, budgets |
-| [`docs/plans/2026-10-15-brain-phase-0-1.md`](docs/plans/2026-10-15-brain-phase-0-1.md) | Execution plan — 15 tasks with exact interfaces and tests |
+| [`docs/plans/2026-10-15-brain-phase-0-1.md`](docs/plans/2026-10-15-brain-phase-0-1.md) | Execution plan (Phase 0/1) — 15 tasks with exact interfaces and tests |
+| [`docs/plans/2026-10-15-brain-phase-2.md`](docs/plans/2026-10-15-brain-phase-2.md) | Phase 2 plan — semantic layer (extraction, embeddings, search blend) |
+| [`docs/plans/2026-10-15-brain-phase-3.md`](docs/plans/2026-10-15-brain-phase-3.md) | Phase 3 plan — review engine, why/entity views, contradictions |
 | [`.superpowers/sdd/2026-10-15-brain-phase-0-1/progress.md`](.superpowers/sdd/2026-10-15-brain-phase-0-1/progress.md) | Running ledger — rulings, gotchas, environment facts. **Read before changing anything.** |
+| [`.superpowers/sdd/2026-10-15-brain-phase-2/progress.md`](.superpowers/sdd/2026-10-15-brain-phase-2/progress.md) | Phase 2 ledger — rulings + gotchas |
+| [`.superpowers/sdd/2026-10-15-brain-phase-3/progress.md`](.superpowers/sdd/2026-10-15-brain-phase-3/progress.md) | Phase 3 ledger — rulings + gotchas |
 | `.superpowers/sdd/2026-10-15-brain-phase-0-1/task-N-brief.md` | Per-task briefs (interfaces, verbatim tests) |
 | [`docs/key-rotation.md`](docs/key-rotation.md) | PAYLOAD_KEK rotation procedure |
 

@@ -379,11 +379,11 @@ you can also push") before execution; the ledger records it.
   lifecycle, deterministic-contradiction ruling (LLM prompt deferred),
   entity-merge deferral rationale.
 
-- [ ] **Step 1: Tests** — runner executes all cases green.
-- [ ] **Step 2: Run full gate** — `npx vitest run` (unpiped) + `npx tsc --noEmit`.
-- [ ] **Step 3: Docs + ledger; tick every box in this plan; mirror the plan to
+- [x] **Step 1: Tests** — runner executes all cases green.
+- [x] **Step 2: Run full gate** — `npx vitest run` (unpiped) + `npx tsc --noEmit`.
+- [x] **Step 3: Docs + ledger; tick every box in this plan; mirror the plan to
   `/home/taxin/Work/docs/superpowers/plans/`.**
-- [ ] **Step 4: Commit** — `docs: close phase 3 (forget eval + ledger)`.
+- [x] **Step 4: Commit** — `docs: close phase 3 (forget eval + ledger)`.
 
 ## Merge + acceptance (closing commit — one push)
 
