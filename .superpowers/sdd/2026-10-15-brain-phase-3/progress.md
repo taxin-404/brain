@@ -45,3 +45,10 @@ Task 5: Ruling: versions sorted by learned_at ASC, tiebreak id (ULIDs are time-s
 Task 5: versions carry an extra `deleted` flag (status='deleted' ⇔ object:null) beyond the brief's field list; sources rows keep the brief's shape exactly, `restricted:true` only when masked.
 Task 5: tsc quirk: annotated loop vars as `VersionRow | null` — TS7022 fired on the cursor↔row inference cycle (`bind(cursor)` feeds the query whose result feeds cursor).
 Task 5: complete (commits 3959118..42fc751, tests: npx vitest run →    Duration  25.45s (transform 3.08s, setup 31.54s, import 4.14s, tests 17.84s, environment 5ms))
+
+Task 6: Ruling: counter semantics — `superseded` counts OLD facts actually superseded (one per successful supersedeFact call); `disputed` counts NEW facts inserted with status='disputed'. Both are additive fields on ExtractionRun (sweep EMPTY_RUN updated; handleExtract response picks them up automatically; health untouched).
+Task 6: Ruling: rule precedence follows the plan table exactly — multivalued beats everything (even a user_stated new does not supersede on a multivalued predicate); then new user_stated supersedes; then old user_stated or exclusive predicate → disputed; else coexist.
+Task 6: Ruling: a supersedeFact failure during extraction (lost race: old no longer active) is logged and skipped; the new fact stays active — worst case a benign double-active, never a failed chunk.
+Task 6: Rule query only considers old facts with status='active' AND object_text IS NOT NULL AND object_text != new object (exact duplicates took the confirm path; purged rows are status='deleted' anyway).
+Task 6: test change: sweep.test.ts's extraction test seeded two conflicting user_stated facts (same subject/predicate "noted", different objects) which now supersede → switched its predicate to multivalued "uses" so the sweep-wiring test stays focused (2 facts, 2 embedded).
+Task 6: complete (commits 4a5f9ad..0745553, tests: npx vitest run →    Duration  21.60s (transform 2.84s, setup 25.62s, import 3.52s, tests 17.22s, environment 1ms))
