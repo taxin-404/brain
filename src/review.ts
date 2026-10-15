@@ -9,6 +9,7 @@ import { json } from "./http";
 // runs post-load only; see the note in proposals.ts).
 import { createProposal, ProposalError } from "./proposals";
 import { consumeConfirmToken, PurgeError, purgeEventCore } from "./purge";
+import { promoteProcedureProposal } from "./procedures";
 
 /** The Phase-3 truth engine: reviewing a proposal applies it for real.
  *  Corrections supersede (soft, reversible via `undo`); forgets purge (fact =
@@ -27,7 +28,8 @@ export class ReviewError extends Error {
       | "irreversible"
       | "invalid_token"
       | "conflict"
-      | "unsupported",
+      | "unsupported"
+      | "untrusted_origin",
     message: string,
   ) {
     super(message);
@@ -142,13 +144,14 @@ export async function applyProposal(
   env: Env,
   proposalId: string,
   opts: ApplyOptions,
-): Promise<{ applied: true; kind: string }> {
+): Promise<{ applied: true; kind: string; procedure_id?: string; version?: number }> {
   const row = await loadProposal(env, proposalId);
   if (row.status !== "pending") throw new ReviewError("not_pending", "proposal is not pending");
 
   const db = env.BRAIN_DB;
   const now = opts.now ?? Date.now();
   const reason = opts.reason ?? "";
+  let promoted: { procedure_id: string; version: number } | null = null;
 
   if (row.kind === "correction") {
     const { newFactId, oldFactId } = await createFactFromCorrection(env, proposalId, { actor: opts.actor, now });
@@ -231,7 +234,7 @@ export async function applyProposal(
       reason,
     });
   } else if (row.kind === "procedure") {
-    throw new ReviewError("unsupported", "procedure proposals arrive in Phase 5");
+    promoted = await promoteProcedureProposal(env, row, { now, actor: opts.actor, reason });
   } else {
     throw new ReviewError("conflict", `unknown proposal kind: ${row.kind}`);
   }
@@ -240,7 +243,7 @@ export async function applyProposal(
     .prepare(`UPDATE proposals SET status = 'applied', applied_at = ?1, applied_by = ?2 WHERE id = ?3`)
     .bind(now, opts.actor, proposalId)
     .run();
-  return { applied: true, kind: row.kind };
+  return { applied: true, kind: row.kind, ...(promoted ? { procedure_id: promoted.procedure_id, version: promoted.version } : {}) };
 }
 
 /** Discard a pending proposal (nothing is written besides status + audit). */
@@ -274,6 +277,9 @@ export async function undoProposal(
     throw new ReviewError("not_applied", "proposal has not been applied");
   }
   if (row.kind === "forget") throw new ReviewError("irreversible", "purges cannot be undone");
+  if (row.kind === "procedure") {
+    throw new ReviewError("unsupported", "procedure promotion has no undo (versions are append-only)");
+  }
 
   const db = env.BRAIN_DB;
   const now = opts.now ?? Date.now();

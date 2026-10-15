@@ -84,15 +84,15 @@ actor, reason}) → {procedure_id, version}`; `applyProposal` kind=procedure
 calls it and returns `{applied:true, kind, procedure_id, version}`;
 `undoProposal` refuses kind=procedure.
 
-- [ ] **Step 1: Tests** — draft v1 created (row + version row with steps JSON
+- [x] **Step 1: Tests** — draft v1 created (row + version row with steps JSON
   + `promoted_from_events` `[evidence]` + audit); external evidence refused
   with zero rows (proposal stays pending); no evidence → origin_trust 0.5;
   explicit `procedure_id` → v2 + `current_version` 2, **approved → draft**;
   name-match → v2; deprecated → 409-style refusal; payload validation
   failures; undo refused.
-- [ ] **Step 2: Run and watch fail.**
-- [ ] **Step 3: Implement** module + integration.
-- [ ] **Step 4: Gate + commit** — `feat(procedures): promotion + versioning engine`.
+- [x] **Step 2: Run and watch fail.**
+- [x] **Step 3: Implement** module + integration.
+- [x] **Step 4: Gate + commit** — `feat(procedures): promotion + versioning engine`.
 
 ### Task 2 — approval gate + agent-cannot-self-approve
 

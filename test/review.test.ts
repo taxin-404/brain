@@ -294,9 +294,11 @@ describe("applyProposal — block_edit", () => {
 });
 
 describe("applyProposal — procedure", () => {
-  it("is unsupported until Phase 5", async () => {
+  it("promotes into a draft procedure (Phase 5) and undo refuses", async () => {
     const proposalId = await seedProposal({ kind: "procedure", payload: { name: "p", steps: ["a"] }, target_type: "procedure" });
-    await expect(applyProposal(env, proposalId, { actor: "user" })).rejects.toMatchObject({ code: "unsupported" });
+    const res = await applyProposal(env, proposalId, { actor: "user" });
+    expect(res).toMatchObject({ applied: true, kind: "procedure", version: 1 });
+    await expect(undoProposal(env, proposalId, { actor: "user" })).rejects.toMatchObject({ code: "unsupported" });
   });
 });
 
