@@ -19,3 +19,9 @@ plan edits.
 - Manual kicks POST /v1/consolidate + POST /v1/reflect (admin, single-shot).
 - "Promote confirmed proposals" & entity merge stay deferred (no confirm-kind;
   no merge flow) — ruled out of scope for Phase 4.
+
+Task 1: Ruling: expireFact/mergeFacts throw plain `Error` on invariant violations (consistent with supersedeFact/disputeFact; these are system-internal, not user-facing).
+Task 1: Ruling: expire is soft — text + FTS row stay (why keeps provenance); the vector is pruned (design §9 "consolidation must demonstrably prune" = stored dims).
+Task 1: Ruling: mergeFacts is bookkeeping only — noisy-OR lives in consolidate.ts which owns evidence-unit knowledge; mergeFacts re-clamps at 0.85 as a belt; audit 'merge' on the survivor with reason "merged <victimId>", victim's supersede audit comes from supersedeFact.
+Task 1: Ruling: first_seen_at via coalesce to last_confirmed_at (createFact always sets both; null-safe anyway).
+Task 1: complete (commits 9962fdd..5ae4405, tests: npx vitest run →    Duration  22.93s (transform 2.90s, setup 28.07s, import 3.81s, tests 17.68s, environment 7ms))
