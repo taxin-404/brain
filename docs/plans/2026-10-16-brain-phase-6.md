@@ -157,12 +157,12 @@ Spec anchors that pin the behavior:
 **Files:** Create `src/inspector.ts`; modify `src/index.ts`; create
 `test/inspector.test.ts`.
 
-- [ ] **Step 1: Tests** — `GET /inspector` 200 `text/html`, contains the
+- [x] **Step 1: Tests** — `GET /inspector` 200 `text/html`, contains the
   token input and fetch calls to existing read routes, contains **no** seeded
   fact text; security headers present.
-- [ ] **Step 2: Run and watch fail.**
-- [ ] **Step 3: Implement** the single-file page + route.
-- [ ] **Step 4: Gate + commit** — `feat(inspector): read-only console page`.
+- [x] **Step 2: Run and watch fail.**
+- [x] **Step 3: Implement** the single-file page + route.
+- [x] **Step 4: Gate + commit** — `feat(inspector): read-only console page`.
 
 ### Task 6 — docs + close-out
 

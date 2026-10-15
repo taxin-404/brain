@@ -3,6 +3,7 @@ import { resolveScope, requireScope } from "./auth";
 import { json } from "./http";
 import { healthReport } from "./health";
 import { handleEvents } from "./ingest";
+import { handleInspector } from "./inspector";
 import { handleExtract } from "./extract";
 import { handleConsolidate, runConsolidation } from "./consolidate";
 import { handleReflect, handleReflectionsLatest, runReflection } from "./reflect";
@@ -145,7 +146,7 @@ const ROUTES: Array<{ method: string; re: RegExp; need: Need; handler: Handler }
   {
     method: "GET",
     re: /^\/v1\/export\/([A-Za-z0-9_-]+)\/download$/,
-    need: "link",
+    need: "public",
     handler: (request, env, _scope, _ctx, match) => handleExportDownload(env, match[1], new URL(request.url)),
   },
   {
@@ -153,6 +154,12 @@ const ROUTES: Array<{ method: string; re: RegExp; need: Need; handler: Handler }
     re: /^\/v1\/restore$/,
     need: "admin",
     handler: (request, env) => handleRestore(request, env),
+  },
+  {
+    method: "GET",
+    re: /^\/inspector$/,
+    need: "public",
+    handler: async () => handleInspector(),
   },
   {
     method: "GET",
@@ -218,9 +225,9 @@ export default {
       if (route.method !== request.method) continue;
       const match = route.re.exec(pathname);
       if (!match) continue;
-      // `link` routes authenticate via their own HMAC-signed URL parameters
-      // (short-TTL export downloads); the scope slot is a placeholder.
-      if (route.need === "link") return route.handler(request, env, "MCP_READ", ctx, match);
+      // `public` routes carry their own auth (signed export links) or zero
+      // data (inspector shell); the scope slot is a placeholder.
+      if (route.need === "public") return route.handler(request, env, "MCP_READ", ctx, match);
       const denied = requireScope(request, env, route.need);
       if (denied) return denied;
       const scope = resolveScope(request, env);

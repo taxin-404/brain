@@ -1,7 +1,8 @@
 export type Scope = "MCP_READ" | "MCP_PROPOSE" | "ADMIN";
-/** `link` = no bearer required: the route carries its own HMAC-signed
- *  capability in the URL (export downloads). Use sparingly. */
-export type Need = "read" | "propose" | "admin" | "any" | "link";
+/** `public` = no bearer required: the handler authenticates itself (HMAC-
+ *  signed export download URLs) or serves a data-free shell (the inspector
+ *  page). Exact list is two routes; keep it that way. */
+export type Need = "read" | "propose" | "admin" | "any" | "public";
 export interface Env {
   BRAIN_DB: D1Database;
   BRAIN_RAW: R2Bucket;
