@@ -73,6 +73,7 @@ interface ExportMeta {
   tables: boolean;
   table_index: number;
   row_offset: number;
+  header: boolean;
 }
 
 interface RestoreState {
@@ -111,6 +112,8 @@ const readMeta = async (env: Env, job: string): Promise<ExportMeta | null> => {
       tables: m.tables !== false,
       table_index: typeof m.table_index === "number" ? m.table_index : 0,
       row_offset: typeof m.row_offset === "number" ? m.row_offset : 0,
+      // Pre-flag jobs always had their header written on the first call.
+      header: typeof m.header === "boolean" ? m.header : true,
     };
   } catch {
     return null;
@@ -347,7 +350,9 @@ async function exportSlice(env: Env, job: string, meta: ExportMeta, slice: numbe
   let ti = meta.table_index;
   let off = meta.row_offset;
   let tablesDone = meta.tables;
-  if (!meta.tables) {
+  // The header is written exactly once per job — a tables walk that spans
+  // several calls must not re-emit it.
+  if (!meta.header) {
     await line(
       JSON.stringify({
         kind: "header",
@@ -358,6 +363,8 @@ async function exportSlice(env: Env, job: string, meta: ExportMeta, slice: numbe
         tables: [...tables, "r2_payloads"],
       }),
     );
+  }
+  if (!meta.tables) {
     // Tables walk in ≤400-row slices: LIMIT/OFFSET pages with the position in
     // meta.json. When the budget runs out mid-table the call ends early —
     // the payload walk only starts on a call that finished the tables.
@@ -389,6 +396,7 @@ async function exportSlice(env: Env, job: string, meta: ExportMeta, slice: numbe
     await flush();
     const next: ExportMeta = {
       ...meta,
+      header: true,
       tables: false,
       table_index: ti,
       row_offset: off,
@@ -432,6 +440,7 @@ async function exportSlice(env: Env, job: string, meta: ExportMeta, slice: numbe
   const cursor = list.truncated ? (list.cursor ?? null) : null;
   const next: ExportMeta = {
     ...meta,
+    header: true,
     tables: true,
     table_index: ti,
     row_offset: 0,
@@ -473,6 +482,7 @@ export async function startExport(
     tables: false,
     table_index: 0,
     row_offset: 0,
+    header: false,
   };
   const next = await exportSlice(env, job, meta, clampSlice(opts.limit, MAX_EXPORT_SLICE, DEFAULT_EXPORT_SLICE));
   return { status: 200, body: await exportView(env, job, next) };

@@ -279,6 +279,7 @@ describe("export — resumable jobs (free-plan subrequest ceiling)", () => {
     const rowsSoFar = firstLines.filter((l) => l.table === "events").flatMap((l) => l.rows);
     expect(rowsSoFar.length).toBeGreaterThan(0);
     expect(rowsSoFar.length).toBeLessThanOrEqual(400);
+    expect(firstLines.filter((l) => l.kind === "header").length).toBe(1);
 
     // Resume to done, bounded.
     let view = b1;
@@ -299,6 +300,8 @@ describe("export — resumable jobs (free-plan subrequest ceiling)", () => {
       .split("\n")
       .filter(Boolean)
       .map((l) => JSON.parse(l) as Record<string, unknown>);
+    // Exactly one header even though the walk spanned several calls.
+    expect(lines.filter((l) => l.kind === "header").length).toBe(1);
     const ids = lines
       .filter((l) => l.table === "events")
       .flatMap((l) => l.rows as Array<{ id: string }>)

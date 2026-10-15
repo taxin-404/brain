@@ -225,11 +225,11 @@ finished artifact.
 
 **Files:** Modify `src/exporter.ts`; extend `test/export.test.ts`.
 
-- [ ] **Step 1: Test** — final artifact of the >400-events export has exactly
+- [x] **Step 1: Test** — final artifact of the >400-events export has exactly
   one header line (RED: currently 2+).
-- [ ] **Step 2: Run and watch fail.**
-- [ ] **Step 3: Implement** `header` flag in meta.
-- [ ] **Step 4: Gate + commit** — `fix(export): single header across sliced walks`.
+- [x] **Step 2: Run and watch fail.**
+- [x] **Step 3: Implement** `header` flag in meta.
+- [x] **Step 4: Gate + commit** — `fix(export): single header across sliced walks`.
 
 ## Merge + acceptance (closing — one push)
 
