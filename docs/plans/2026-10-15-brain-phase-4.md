@@ -225,11 +225,11 @@ sweep on `*/30` only; AUDIT actions free-form strings.
   number`. Additive: existing fields untouched; MCP `health_report` tool
   passes the object through unchanged.
 
-- [ ] **Step 1: Tests** — empty DB → `last_run:null`, `reflections:0`; after
+- [x] **Step 1: Tests** — empty DB → `last_run:null`, `reflections:0`; after
   seeded run/reflection rows → values surface; existing assertions still pass.
-- [ ] **Step 2: Run and watch fail.**
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4: Gate + commit** — `feat(health): consolidation + reflection status`.
+- [x] **Step 2: Run and watch fail.**
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Gate + commit** — `feat(health): consolidation + reflection status`.
 
 ### Task 6 — consolidation eval
 
