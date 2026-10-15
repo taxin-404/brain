@@ -174,15 +174,38 @@ Spec anchors that pin the behavior:
 - [x] **Step 3: Tick every box; ledger close-out; mirror.**
 - [x] **Step 4: Commit** — `docs: close phase 6 (reach + restore)`.
 
+### Task 7 — resumable export/restore (free-plan subrequest ceiling)
+
+**Found during live acceptance:** the first `profile=backup` export on prod died
+with CF error 1101 — the free plan allows **1,000 Cloudflare-service
+subrequests per invocation** (50 external; the 2026-02 changelog kept the free
+cap), and prod has ~1.3k payload objects → one-shot walks can never work. The
+job becomes genuinely chunked: each invocation processes one bounded slice and
+persists a cursor in the `meta.json` sidecar; the admin repeats
+`GET /v1/export?job=…` until `done: true`. Restore gets the same treatment
+(payload re-puts sliced; table inserts + FTS rebuild once).
+
+**Files:** Modify `src/exporter.ts`; extend `test/export.test.ts`,
+`test/eval-restore.test.ts`.
+
+- [ ] **Step 1: Tests** — export with `limit=2`: first call `state:"running"`,
+  download 409s while running, resume with `?job=` until done; final artifact
+  has one header and every payload key exactly once; restore with `limit=2`
+  slices payload re-puts (`done:false` → `done:true`), one audit row.
+- [ ] **Step 2: Run and watch fail.**
+- [ ] **Step 3: Implement** meta state machine + resume + download/restore guards.
+- [ ] **Step 4: Gate + commit** — `fix(export): resumable jobs for free-plan ceilings`.
+
 ## Merge + acceptance (closing — one push)
 
-- [ ] Merge `phase-6` → `master`, push; watch the CI build once. No migration.
+- [x] Merge `phase-6` → `master`, push (done `71a455d`); CI build `5ad08322…` success.
 - [ ] Live acceptance, single-shot each:
       1. `POST /v1/connectors/github/sync` (ADMIN) with `taxin-404/brain`
          lookback 720 h → fetched ≥1, stored, duplicates on second call.
-      2. `GET /v1/export?profile=backup` → job + link → download → NDJSON
-         header + rows; audit row present.
+      2. `GET /v1/export?profile=backup` → job → resume `?job=` until
+         `done:true` (free-plan slices) → download → NDJSON header + rows.
       3. `GET /v1/export?profile=portable` without token → 403; mint confirm
-         token → export → download once → R2 object gone (D1/R2 check).
+         token → export → resume → download once → second download 404s (R2
+         object gone).
 - [ ] Owner actions (reminder only): Google Cloud budget alert; key rotation
       from the Phase-2 ledger; escrow `.secrets/prod.env` then delete.
