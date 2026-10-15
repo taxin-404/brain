@@ -4,6 +4,8 @@ import { json } from "./http";
 import { healthReport } from "./health";
 import { handleEvents } from "./ingest";
 import { handleMintToken, handlePurge } from "./purge";
+import { handleSearch } from "./search";
+import { handleGetBlocks, handlePutBlock } from "./blocks";
 
 export type Handler = (
   request: Request,
@@ -43,6 +45,24 @@ const ROUTES: Array<{ method: string; re: RegExp; need: Need; handler: Handler }
     re: /^\/v1\/events\/([A-Za-z0-9_-]+)\/purge$/,
     need: "admin",
     handler: (request, env, _scope, _ctx, match) => handlePurge(request, env, match[1]),
+  },
+  {
+    method: "GET",
+    re: /^\/v1\/search$/,
+    need: "read",
+    handler: (request, env, scope) => handleSearch(request, env, scope),
+  },
+  {
+    method: "GET",
+    re: /^\/v1\/blocks$/,
+    need: "read",
+    handler: (_request, env) => handleGetBlocks(env),
+  },
+  {
+    method: "PUT",
+    re: /^\/v1\/blocks\/([a-z][a-z0-9_]*)$/,
+    need: "admin",
+    handler: (request, env, _scope, _ctx, match) => handlePutBlock(request, env, match[1]),
   },
 ];
 
