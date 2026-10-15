@@ -70,6 +70,10 @@ Pushing to `master` makes Cloudflare build and deploy `brain-api` automatically
   authenticated route 401s.
 - **Preview builds are intentionally NOT configured** — previews would run
   against the same prod D1/R2; there is no preview isolation yet.
+- **Push-triggered builds go silent if the GitHub App loses repo access.** The
+  repo is public, so manual API-triggered builds keep working even when webhooks
+  are dead — before debugging anything else, verify the *Cloudflare Workers and
+  Pages* app still lists `brain` (https://github.com/settings/installations).
 
 Builds API (for agents; management token in `.secrets/cf-builds.env` —
 user-scoped, `Workers Builds Configuration:Edit` + `Workers Scripts:Read`):
