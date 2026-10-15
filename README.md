@@ -145,6 +145,12 @@ consolidation pass, and weekly/monthly reflections.
   superseded, conflicts, pruned) + `reflections` count.
 - **Eval:** `test/eval-consolidation.test.ts` pins the §8 "done when": cross-unit
   merges only, tombstones honored, restricted never serialized, vectors pruned.
+- **Acceptance (2026-10-16, single-shot, post-merge):** health exposed the new
+  fields; `POST /v1/consolidate` → run `01M50BYJ…` recorded (0 candidate groups
+  on live data yet — 5 active inferred facts, no pairs); `POST /v1/reflect
+  {week}` → run `01M50BZA…` with 2 evidence-backed insights; latest read + post
+  health both green. Full evidence in the
+  [Phase 4 plan](docs/plans/2026-10-15-brain-phase-4.md) closing section.
 
 ## Read-first map
 
@@ -196,7 +202,7 @@ live in `vitest.config.ts` miniflare bindings — the suite runs from a fresh cl
 - Worker `brain-api` → `https://brain-api.taxin-404.workers.dev` (deployed)
 - D1 `brain-db` + R2 `brain-raw` live (APAC region), 5/5 remote migrations applied
 - Prod secrets set via `wrangler secret put`; values escrowed out-of-band, **never in the repo**
-- Cron `*/30 * * * *`: prune expired confirm tokens + budget warn/breaker logging
+- Crons: `*/30` sweep + nightly consolidation (`0 3 * * *`) + weekly/monthly reflections (`0 4 * * 1` / `0 4 1 * *`)
 
 ## Deploy & CI (Cloudflare Workers Builds)
 

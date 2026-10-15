@@ -267,9 +267,9 @@ sweep on `*/30` only; AUDIT actions free-form strings.
 
 ## Merge + acceptance (closing — one push)
 
-- [ ] Merge `phase-4` → `master`, push; watch the CI build once (status +
+- [x] Merge `phase-4` → `master`, push; watch the CI build once (status +
   outcome only). No migration to apply.
-- [ ] Live acceptance, single-shot each:
+- [x] Live acceptance, single-shot each:
       1. `GET /v1/health-report` = 200 (reads `consolidation.last_run`).
       2. `POST /v1/consolidate` (admin) → run JSON; expect 200 and a
          `consolidation_runs` row (verify via D1 read).
@@ -278,3 +278,27 @@ sweep on `*/30` only; AUDIT actions free-form strings.
       4. Spot-check `GET /v1/health-report` again → `last_run` present.
 - [ ] Owner actions at merge (reminder only): Google Cloud budget alert; key
       rotation from the Phase-2 ledger.
+
+### Acceptance evidence (2026-10-16, single-shot, post-merge — master @ `a43ddee`)
+
+- **Merge:** `phase-4` fast-forwarded to master; CI builds for `a43ddee`
+  succeeded (`8cf36422…` + a duplicate webhook delivery `c9764ae0…`, both
+  `stopped/success`; identical commit — the duplicate is a delivery artifact,
+  not a config error).
+- **1. Health (pre-run):** `HTTP 200` — `reflections: 0`,
+  `consolidation.last_run: null`, `events: 1323`, `purges: 16`,
+  `extractions.pending: 20`, budget used 3683 (no warn/breaker).
+- **2. Consolidation kick:** `POST /v1/consolidate` → `HTTP 200`, run
+  `01M50BYJXKD7TRQTY8R9V3NQ1V` (`groups_sent: 0`, all counters 0,
+  `degraded:false`). Prod D1 row confirmed with the same id and counters.
+  No candidate groups on live data yet: 5 active `inferred` facts with text,
+  zero `(subject, predicate)` groups ≥2, zero lapsed `temporary` facts — the
+  20 pending extractions will feed the next nightly run. No model call spent.
+- **3. Reflection:** `POST /v1/reflect {"period":"week"}` → `HTTP 200`, run
+  `01M50BZA17HZ0T0XB54XGVECBV`, `skipped:false`, `degraded:false`, 2 insights
+  with live fact evidence (`01M509W5XX…`, `01M509W81M…`). The model returned
+  2 insights; the ledgered 1–8 tolerance accepted them (spec asks 3–5).
+  `GET /v1/reflections/latest` → same id, same insights, `fact_ids` = both.
+- **4. Health (post-run):** `reflections: 1`,
+  `consolidation.last_run.id = 01M50BYJXKD7TRQTY8R9V3NQ1V`.
+
