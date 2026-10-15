@@ -3,11 +3,14 @@ export type Need = "read" | "propose" | "admin" | "any";
 export interface Env {
   BRAIN_DB: D1Database;
   BRAIN_RAW: R2Bucket;
+  VECTORIZE: VectorizeIndex;
   PAYLOAD_KEK: string;
   CONTENT_HMAC_KEY: string;
   MCP_READ_TOKEN: string;
   MCP_PROPOSE_TOKEN: string;
   ADMIN_TOKEN: string;
+  AI_GATEWAY_BASE: string;
+  GEMINI_API_KEY: string;
 }
 export const TRUST = { user: 1.0, assistant: 0.9, tool: 0.7, external: 0.4 } as const;
 export function canRead(scope: Scope): boolean {

@@ -15,6 +15,8 @@ export default defineConfig(async () => {
             MCP_READ_TOKEN: "dev-read",
             MCP_PROPOSE_TOKEN: "dev-propose",
             ADMIN_TOKEN: "dev-admin",
+            GEMINI_API_KEY: "dev-gemini",
+            AI_GATEWAY_BASE: "https://gw.test/google-ai-studio",
             TEST_MIGRATIONS: migrations,
           },
         },

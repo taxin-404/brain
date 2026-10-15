@@ -15,8 +15,29 @@ describe("schema", () => {
       `SELECT name FROM sqlite_master WHERE type = 'table'`,
     ).all<{ name: string }>();
     const names = results.map((r) => r.name);
-    for (const t of ["events", "event_keys", "facts", "entities", "proposals", "confirm_tokens", "rate_budgets", "audit_log", "events_fts"])
+    for (const t of ["events", "event_keys", "facts", "entities", "proposals", "confirm_tokens", "rate_budgets", "audit_log", "events_fts", "extractions"])
       expect(names).toContain(t);
+  });
+
+  it("extractions queue has the exact columns and status index", async () => {
+    const { results } = await env.BRAIN_DB.prepare(`PRAGMA table_info(extractions)`).all<{ name: string }>();
+    expect(results.map((r) => r.name)).toEqual([
+      "event_id",
+      "status",
+      "attempts",
+      "model",
+      "error",
+      "facts_created",
+      "tokens_in",
+      "tokens_out",
+      "injection_suspected",
+      "created_at",
+      "updated_at",
+    ]);
+    const idx = await env.BRAIN_DB.prepare(
+      `SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_extractions_status'`,
+    ).first<{ name: string }>();
+    expect(idx?.name).toBe("idx_extractions_status");
   });
 
   it("events is append-only except the whitelisted purge transition", async () => {
