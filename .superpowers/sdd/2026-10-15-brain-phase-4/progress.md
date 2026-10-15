@@ -40,3 +40,8 @@ Task 3: Ruling: `reflection_sources` gets one row per unique fact id across surv
 Task 3: Ruling: latest-route test determinism — created_at ties broken by id made "newest" random under a shared DB; test now creates a strictly-newer run instead of trusting ordering. Route itself keeps `ORDER BY created_at DESC, id DESC`.
 Task 3: Prompt: spec §6 [REFLECTION] text verbatim + JSON interface appendix (input shape, output shape, ids-from-input rule) — same Phase-2 pattern.
 Task 3: complete (commits 6370b0a..2732c89, tests: npx vitest run →    Duration  25.27s (transform 2.98s, setup 30.68s, import 4.56s, tests 19.78s, environment 7ms))
+
+Task 4: Ruling: `routeCron` maps exact trigger strings; unknown triggers log `[cron] unknown trigger` and no-op (a dashboard-added cron never runs the wrong work). The scheduled body wraps every job in try/catch (log-only) so a cron never dies silently; `ctx.waitUntil` keeps the invocation alive.
+Task 4: Ruling: cron mapping covered by unit tests; wrangler.jsonc trigger list verified by grep in the gate (workerd test env cannot read config files) — drift between config and mapping caught by the exact-string tests.
+Task 4: Ruling: weekly = "0 4 * * 1" (Mon 04:00 UTC), monthly = "0 4 1 * *" (1st 04:00 UTC), consolidation "0 3 * * *" — 4 of the 5 free slots; one slot left spare.
+Task 4: complete (commits 53cc77c..bb31732, tests: npx vitest run →    Duration  26.28s (transform 3.00s, setup 31.55s, import 4.82s, tests 19.81s, environment 5ms))
