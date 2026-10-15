@@ -215,6 +215,22 @@ the portable payload page at 100 objects.
 - [x] **Step 3: Implement** sliced tables + hoisted KEK + portable page cap.
 - [x] **Step 4: Gate + commit** — `fix(export): slice tables + hoist KEK for CPU ceiling`.
 
+### Task 9 — single header on multi-call table walks (acceptance fix)
+
+**Found during live acceptance:** a job whose tables spanned multiple calls
+emitted the header **once per call** (10 headers in the 6.8 MB artifact).
+Small-brain tests never noticed — tables fit in one call. Guard the header
+with a persisted `header` flag; assert header count mid-walk and in the
+finished artifact.
+
+**Files:** Modify `src/exporter.ts`; extend `test/export.test.ts`.
+
+- [ ] **Step 1: Test** — final artifact of the >400-events export has exactly
+  one header line (RED: currently 2+).
+- [ ] **Step 2: Run and watch fail.**
+- [ ] **Step 3: Implement** `header` flag in meta.
+- [ ] **Step 4: Gate + commit** — `fix(export): single header across sliced walks`.
+
 ## Merge + acceptance (closing — one push)
 
 - [x] Merge `phase-6` → `master`, push (done `71a455d`); CI build `5ad08322…` success.
