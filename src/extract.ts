@@ -10,7 +10,7 @@ import {
   type SourceContext,
 } from "./facts";
 import { json } from "./http";
-import { EXTRACTION_MODEL, geminiJson, LlmError } from "./llm";
+import { geminiJson, LlmError } from "./llm";
 import { FACT_EXTRACTION_PROMPT } from "./prompts";
 
 export interface ExtractionRun {
@@ -129,7 +129,7 @@ export async function processExtractions(
     const lines = chunk.map((r) => ({ event_id: r.id, actor: r.actor, trust: r.trust, excerpt: r.excerpt ?? "" }));
 
     try {
-      const { value, tokensIn, tokensOut } = await geminiJson(
+      const { value, tokensIn, tokensOut, model } = await geminiJson(
         env,
         { system: FACT_EXTRACTION_PROMPT, user: JSON.stringify(lines) },
         (v) => normalizeCandidates(v, ctx),
@@ -209,7 +209,7 @@ export async function processExtractions(
             `UPDATE extractions SET status = 'done', facts_created = ?1, tokens_in = ?2, tokens_out = ?3,
                                     model = ?4, updated_at = ?5 WHERE event_id = ?6`,
           )
-          .bind(perEvent.get(r.id) ?? 0, i === 0 ? tokensIn : 0, i === 0 ? tokensOut : 0, EXTRACTION_MODEL, now, r.id)
+          .bind(perEvent.get(r.id) ?? 0, i === 0 ? tokensIn : 0, i === 0 ? tokensOut : 0, model, now, r.id)
           .run();
       }
 

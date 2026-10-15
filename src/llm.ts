@@ -12,6 +12,10 @@ export class LlmError extends Error {
 }
 
 export const EXTRACTION_MODEL = "gemini-3.5-flash-lite";
+/** Availability fallback (owner directive 2026-10-16): when the primary is
+ *  down past its retries, retired (404), or rate-limited, the same call runs
+ *  once more on this model. Config errors and parse failures stay fail-fast. */
+export const EXTRACTION_FALLBACK_MODEL = "gemini-3.1-flash-lite";
 export const EMBEDDING_MODEL = "gemini-embedding-001";
 export const EMBEDDING_DIMS = 768;
 export const EMBED_CHUNK = 10;
@@ -72,12 +76,17 @@ function textOf(resp: GeminiResponse): string {
   return parts.map((p) => p.text ?? "").join("");
 }
 
-export async function geminiJson<T>(
+/** Availability-class failures only: a different model can serve these.
+ *  4xx request/auth errors and parse failures stay with the caller. */
+const fallbackWorthy = (e: LlmError): boolean =>
+  e.code === "network" || e.status === 404 || e.status === 429 || (e.status ?? 0) >= 500;
+
+async function generate<T>(
   env: Env,
-  input: { model?: string; system?: string; user: string; maxOutputTokens?: number; temperature?: number },
+  model: string,
+  input: { system?: string; user: string; maxOutputTokens?: number; temperature?: number },
   validate: (v: unknown) => T,
-): Promise<{ value: T; tokensIn: number; tokensOut: number }> {
-  const model = input.model ?? EXTRACTION_MODEL;
+): Promise<{ value: T; tokensIn: number; tokensOut: number; model: string }> {
   const body = {
     contents: [{ role: "user", parts: [{ text: input.user }] }],
     ...(input.system ? { systemInstruction: { parts: [{ text: input.system }] } } : {}),
@@ -105,7 +114,22 @@ export async function geminiJson<T>(
     value,
     tokensIn: resp.usageMetadata?.promptTokenCount ?? 0,
     tokensOut: resp.usageMetadata?.candidatesTokenCount ?? 0,
+    model,
   };
+}
+
+export async function geminiJson<T>(
+  env: Env,
+  input: { model?: string; system?: string; user: string; maxOutputTokens?: number; temperature?: number },
+  validate: (v: unknown) => T,
+): Promise<{ value: T; tokensIn: number; tokensOut: number; model: string }> {
+  const primary = input.model ?? EXTRACTION_MODEL;
+  try {
+    return await generate(env, primary, input, validate);
+  } catch (err) {
+    if (!(err instanceof LlmError) || !fallbackWorthy(err)) throw err;
+    return await generate(env, EXTRACTION_FALLBACK_MODEL, input, validate);
+  }
 }
 
 interface BatchEmbedResponse {

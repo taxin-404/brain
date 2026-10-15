@@ -36,7 +36,9 @@ Events are projected into durable **facts**: the `*/30` sweep (and the admin
 `POST /v1/extract` kick) sends unprocessed event excerpts to Gemini through the AI
 Gateway and stores facts with bi-temporal bookkeeping, entities, and provenance.
 
-- **Models (pinned):** extraction `gemini-3.5-flash-lite`; embeddings
+- **Models (pinned):** extraction `gemini-3.5-flash-lite` (availability
+  fallback `gemini-3.1-flash-lite`: outage, 429, 5xx, retired-model 404);
+  embeddings
   `gemini-embedding-001` at `outputDimensionality: 768`. Gateway base
   `https://gateway.ai.cloudflare.com/v1/<account>/brain/google-ai-studio`
   (gateway id `brain`).

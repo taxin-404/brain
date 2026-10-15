@@ -5,6 +5,7 @@ import { embedTexts, geminiJson, LlmError } from "../src/llm";
 import { network } from "./server";
 
 const GEN_URL = "https://gw.test/google-ai-studio/v1beta/models/gemini-3.5-flash-lite:generateContent";
+const FALLBACK_URL = "https://gw.test/google-ai-studio/v1beta/models/gemini-3.1-flash-lite:generateContent";
 const EMB_URL = "https://gw.test/google-ai-studio/v1beta/models/gemini-embedding-001:batchEmbedContents";
 
 const genReply = (text: string, tokensIn = 12, tokensOut = 3) => ({
@@ -53,6 +54,7 @@ describe("llm via ai gateway", () => {
     expect(res.value).toEqual({ ok: true });
     expect(res.tokensIn).toBe(12);
     expect(res.tokensOut).toBe(3);
+    expect(res.model).toBe("gemini-3.5-flash-lite");
     expect(seen.key).toBe("dev-gemini");
     expect(seen.contentType).toContain("application/json");
     expect(seen.body.contents?.[0]?.parts?.[0]?.text).toBe("Say ok");
@@ -74,11 +76,16 @@ describe("llm via ai gateway", () => {
     expect(calls).toBe(2);
   });
 
-  it("gives up after three 5xx replies with LlmError http", async () => {
-    let calls = 0;
+  it("gives up after three 5xx from both models with LlmError http", async () => {
+    let primaryCalls = 0;
+    let fallbackCalls = 0;
     network.use(
       http.post(GEN_URL, () => {
-        calls += 1;
+        primaryCalls += 1;
+        return HttpResponse.text("boom", { status: 500 });
+      }),
+      http.post(FALLBACK_URL, () => {
+        fallbackCalls += 1;
         return HttpResponse.text("boom", { status: 500 });
       }),
     );
@@ -87,7 +94,64 @@ describe("llm via ai gateway", () => {
       code: "http",
       status: 500,
     });
-    expect(calls).toBe(3);
+    expect(primaryCalls).toBe(3);
+    expect(fallbackCalls).toBe(3);
+  });
+
+  it("falls back to gemini-3.1-flash-lite when the primary is down, reporting the serving model", async () => {
+    let primaryCalls = 0;
+    let fallbackCalls = 0;
+    network.use(
+      http.post(GEN_URL, () => {
+        primaryCalls += 1;
+        return HttpResponse.text("down", { status: 503 });
+      }),
+      http.post(FALLBACK_URL, () => {
+        fallbackCalls += 1;
+        return HttpResponse.json(genReply('{"ok":true}'));
+      }),
+    );
+    const res = await geminiJson(env, { user: "Say ok" }, (v) => v as { ok: boolean });
+    expect(res.value).toEqual({ ok: true });
+    expect(res.model).toBe("gemini-3.1-flash-lite");
+    expect(primaryCalls).toBe(3);
+    expect(fallbackCalls).toBe(1);
+  });
+
+  it("falls back on a 404 retired model without retrying the primary", async () => {
+    let primaryCalls = 0;
+    let fallbackCalls = 0;
+    network.use(
+      http.post(GEN_URL, () => {
+        primaryCalls += 1;
+        return HttpResponse.text("model not found", { status: 404 });
+      }),
+      http.post(FALLBACK_URL, () => {
+        fallbackCalls += 1;
+        return HttpResponse.json(genReply('{"ok":true}'));
+      }),
+    );
+    const res = await geminiJson(env, { user: "Say ok" }, (v) => v as { ok: boolean });
+    expect(res.value).toEqual({ ok: true });
+    expect(res.model).toBe("gemini-3.1-flash-lite");
+    expect(primaryCalls).toBe(1);
+    expect(fallbackCalls).toBe(1);
+  });
+
+  it("does not fall back on 4xx config errors", async () => {
+    let fallbackCalls = 0;
+    network.use(
+      http.post(GEN_URL, () => HttpResponse.text("bad request", { status: 400 })),
+      http.post(FALLBACK_URL, () => {
+        fallbackCalls += 1;
+        return HttpResponse.json(genReply('{"ok":true}'));
+      }),
+    );
+    await expect(geminiJson(env, { user: "Say ok" }, (v) => v)).rejects.toMatchObject({
+      code: "http",
+      status: 400,
+    });
+    expect(fallbackCalls).toBe(0);
   });
 
   it("fails fast on other 4xx without retrying", async () => {
