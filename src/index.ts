@@ -8,6 +8,7 @@ import { handleMintToken, handlePurge } from "./purge";
 import { handleSearch } from "./search";
 import { handleGetBlocks, handlePutBlock } from "./blocks";
 import { handleMcp } from "./mcp";
+import { handleListProposals } from "./proposals";
 import { runSweep } from "./sweep";
 
 export type Handler = (
@@ -60,6 +61,12 @@ const ROUTES: Array<{ method: string; re: RegExp; need: Need; handler: Handler }
     re: /^\/v1\/facts\/([A-Za-z0-9_-]+)$/,
     need: "read",
     handler: (_request, env, scope, _ctx, match) => handleGetFact(env, scope, match[1]),
+  },
+  {
+    method: "GET",
+    re: /^\/v1\/proposals$/,
+    need: "read",
+    handler: (request, env) => handleListProposals(request, env),
   },
   {
     method: "GET",

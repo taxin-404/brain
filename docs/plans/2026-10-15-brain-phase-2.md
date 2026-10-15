@@ -420,24 +420,24 @@ export async function listProposals(env: Env, opts: { status?: string; limit?: n
 export async function expireProposals(env: Env, now?: number): Promise<number>
 ```
 
-- [ ] `createProposal`: `charge(env.BRAIN_DB, scope, 1)` (rejections → same
+- [x] `createProposal`: `charge(env.BRAIN_DB, scope, 1)` (rejections → same
       error surface as ingest) → insert row (`ulid` id, `review_mode` computed,
       `status='pending'`, `expires_at = now + 14*86_400_000`) → `audit_log` row
       (`actor: scope === "ADMIN" ? "user" : "agent"`, `action: "create"`).
-- [ ] MCP tools: `propose_correction` loads the target fact (404-style
+- [x] MCP tools: `propose_correction` loads the target fact (404-style
       `isError` text when missing: `"fact not found"`); tier via
       `computeReviewMode("correction", fact.sensitivity, evidenceActor)`;
       `propose_forget` / `propose_block_edit` / `propose_procedure` always
       `manual`. All four require `canPropose(scope)` like `remember`.
-- [ ] `GET /v1/proposals?status=&limit=` (read scope): default `status=pending`,
+- [x] `GET /v1/proposals?status=&limit=` (read scope): default `status=pending`,
       `limit ≤ 100` (default 20), newest first.
-- [ ] Tests: update `test/mcp.test.ts` exact toolset to
+- [x] Tests: update `test/mcp.test.ts` exact toolset to
       `["get_blocks","health_report","propose_block_edit","propose_correction","propose_forget","propose_procedure","recall","remember"]`;
       tier matrix (auto only for user-evidenced normal-fact correction; manual
       for: no evidence, sensitive fact, forget, block_edit, procedure);
       read-scope tokens get `isError` on all four; `expires_at = created+14d`;
       charge delta exactly 1; audit row written; list route filters + default.
-- [ ] Gate; commit `feat(phase2): propose-only MCP tools + proposals list`.
+- [x] Gate; commit `feat(phase2): propose-only MCP tools + proposals list`.
 
 ## Task 8 — Sweep + health + manual kick
 

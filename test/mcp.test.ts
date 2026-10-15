@@ -69,7 +69,16 @@ describe("mcp", () => {
   it("exposes exactly the read+propose toolset", async () => {
     const { body } = await mcp("MCP_READ", "tools/list");
     const names = body.result.tools.map((t: { name: string }) => t.name).sort();
-    expect(names).toEqual(["get_blocks", "health_report", "recall", "remember"]);
+    expect(names).toEqual([
+      "get_blocks",
+      "health_report",
+      "propose_block_edit",
+      "propose_correction",
+      "propose_forget",
+      "propose_procedure",
+      "recall",
+      "remember",
+    ]);
   });
 
   it("recall excludes restricted and never leaks confirm tokens", async () => {
