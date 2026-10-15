@@ -166,6 +166,113 @@ export async function supersedeFact(
   });
 }
 
+/** Retire a lapsed fact (Phase 4 consolidation): soft archive — the row keeps
+ *  its text and FTS entry for `why`, loses its vector (dimension pruning),
+ *  closes its edge, and marks `expired_at`. Only active facts can lapse. */
+export async function expireFact(
+  env: Env,
+  factId: string,
+  opts: { now?: number; actor?: "user" | "system" } = {},
+): Promise<void> {
+  const db = env.BRAIN_DB;
+  const now = opts.now ?? Date.now();
+  const row = await db
+    .prepare(`SELECT subject_id, predicate, object_entity_id, status, expires_at FROM facts WHERE id = ?1`)
+    .bind(factId)
+    .first<{
+      subject_id: string;
+      predicate: string;
+      object_entity_id: string | null;
+      status: string;
+      expires_at: number | null;
+    }>();
+  if (!row) throw new Error(`expireFact: fact not found: ${factId}`);
+  if (row.status !== "active") throw new Error(`expireFact: fact not active: ${factId} (${row.status})`);
+
+  await db.prepare(`UPDATE facts SET status = 'archived', expired_at = ?1 WHERE id = ?2`).bind(now, factId).run();
+  await closeFactEdges(
+    env,
+    { subjectId: row.subject_id, predicate: row.predicate, objectEntityId: row.object_entity_id },
+    now,
+  );
+  await deleteFactVector(env, factId);
+
+  await writeAudit(db, {
+    actor: opts.actor ?? "system",
+    action: "expire",
+    targetType: "fact",
+    targetId: factId,
+    before: { status: "active", expires_at: row.expires_at },
+    after: { status: "archived", expired_at: now },
+  });
+}
+
+/** Merge a near-duplicate victim into a survivor (Phase 4 consolidation):
+ *  union the provenance, aggregate the timestamps, set the merged confidence
+ *  (the caller owns evidence-unit knowledge and computes the noisy-OR, capped
+ *  here at 0.85 as a last defense), then soft-supersede the victim so the
+ *  pair collapses into one active fact with full history intact. */
+export async function mergeFacts(
+  env: Env,
+  survivorId: string,
+  victimId: string,
+  opts: { now: number; confidence: number },
+): Promise<void> {
+  const db = env.BRAIN_DB;
+  const rows = await db
+    .prepare(
+      `SELECT id, subject_id, predicate, status, confidence, first_seen_at, last_confirmed_at
+       FROM facts WHERE id IN (?1, ?2)`,
+    )
+    .bind(survivorId, victimId)
+    .all<{
+      id: string;
+      subject_id: string;
+      predicate: string;
+      status: string;
+      confidence: number;
+      first_seen_at: number | null;
+      last_confirmed_at: number;
+    }>();
+  const survivor = rows.results.find((r) => r.id === survivorId);
+  const victim = rows.results.find((r) => r.id === victimId);
+  if (!survivor) throw new Error(`mergeFacts: survivor not found: ${survivorId}`);
+  if (!victim) throw new Error(`mergeFacts: victim not found: ${victimId}`);
+  if (survivor.status !== "active") throw new Error(`mergeFacts: survivor not active: ${survivorId} (${survivor.status})`);
+  if (victim.status !== "active") throw new Error(`mergeFacts: victim not active: ${victimId} (${victim.status})`);
+  if (survivor.subject_id !== victim.subject_id || survivor.predicate !== victim.predicate) {
+    throw new Error(`mergeFacts: subject/predicate mismatch: ${survivorId} vs ${victimId}`);
+  }
+
+  await db
+    .prepare(`INSERT OR IGNORE INTO fact_sources (fact_id, event_id) SELECT ?1, event_id FROM fact_sources WHERE fact_id = ?2`)
+    .bind(survivorId, victimId)
+    .run();
+
+  const confidence = Math.min(0.85, opts.confidence);
+  const firstSeen = Math.min(
+    survivor.first_seen_at ?? survivor.last_confirmed_at,
+    victim.first_seen_at ?? victim.last_confirmed_at,
+  );
+  const lastConfirmed = Math.max(survivor.last_confirmed_at, victim.last_confirmed_at);
+  await db
+    .prepare(`UPDATE facts SET confidence = ?1, first_seen_at = ?2, last_confirmed_at = ?3 WHERE id = ?4`)
+    .bind(confidence, firstSeen, lastConfirmed, survivorId)
+    .run();
+
+  await supersedeFact(env, victimId, survivorId, opts.now, "system");
+
+  await writeAudit(db, {
+    actor: "system",
+    action: "merge",
+    targetType: "fact",
+    targetId: survivorId,
+    before: { confidence: survivor.confidence, first_seen_at: survivor.first_seen_at },
+    after: { confidence, first_seen_at: firstSeen, last_confirmed_at: lastConfirmed },
+    reason: `merged ${victimId}`,
+  });
+}
+
 /** Mark a fact disputed (an applied dispute proposal). Only active facts can
  *  become disputed; callers surface the review-tier errors. */
 export async function disputeFact(env: Env, factId: string, now: number): Promise<void> {

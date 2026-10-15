@@ -117,14 +117,14 @@ sweep on `*/30` only; AUDIT actions free-form strings.
   `reason: "merged <victimId>"`). The noisy-OR math lives in
   `consolidate.ts` (it owns unit knowledge); this function is bookkeeping.
 
-- [ ] **Step 1: Tests** — expire happy path (archived, expired_at, vec gone,
+- [x] **Step 1: Tests** — expire happy path (archived, expired_at, vec gone,
   edges closed, audit row) + guard on non-active; merge happy path (sources
   unioned, min/max timestamps, confidence set, victim superseded_by survivor,
   victim vector gone, both audit rows) + guards (inactive victim, predicate
   mismatch).
-- [ ] **Step 2: Run and watch fail.**
-- [ ] **Step 3: Implement** both functions.
-- [ ] **Step 4: Gate + commit** — `feat(factstore): expire + merge lifecycle`.
+- [x] **Step 2: Run and watch fail.**
+- [x] **Step 3: Implement** both functions.
+- [x] **Step 4: Gate + commit** — `feat(factstore): expire + merge lifecycle`.
 
 ### Task 2 — consolidation engine + `POST /v1/consolidate`
 
