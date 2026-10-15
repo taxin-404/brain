@@ -1,5 +1,5 @@
 export type Scope = "MCP_READ" | "MCP_PROPOSE" | "ADMIN";
-export type Need = "read" | "propose" | "admin";
+export type Need = "read" | "propose" | "admin" | "any";
 export interface Env {
   BRAIN_DB: D1Database;
   BRAIN_RAW: R2Bucket;

@@ -12,7 +12,12 @@ export function resolveScope(request: Request, env: Env): Scope | null {
 export function requireScope(request: Request, env: Env, need: Need): Response | null {
   const scope = resolveScope(request, env);
   if (!scope) return new Response("unauthorized", { status: 401 });
-  const ok = need === "read" ? canRead(scope) : need === "propose" ? canPropose(scope) : canAdmin(scope);
+  // "any": any valid token reaches the route; per-tool gating happens inside
+  // (used by /mcp, which serves read tools for MCP_READ and `remember` for
+  // MCP_PROPOSE — the scope hierarchy here is strict, so "read" would 403 the
+  // propose token that spec §11 requires on the same endpoint).
+  const ok =
+    need === "any" ? true : need === "read" ? canRead(scope) : need === "propose" ? canPropose(scope) : canAdmin(scope);
   if (!ok) return new Response("forbidden", { status: 403 });
   return null;
 }

@@ -6,6 +6,7 @@ import { handleEvents } from "./ingest";
 import { handleMintToken, handlePurge } from "./purge";
 import { handleSearch } from "./search";
 import { handleGetBlocks, handlePutBlock } from "./blocks";
+import { handleMcp } from "./mcp";
 
 export type Handler = (
   request: Request,
@@ -63,6 +64,18 @@ const ROUTES: Array<{ method: string; re: RegExp; need: Need; handler: Handler }
     re: /^\/v1\/blocks\/([a-z][a-z0-9_]*)$/,
     need: "admin",
     handler: (request, env, _scope, _ctx, match) => handlePutBlock(request, env, match[1]),
+  },
+  {
+    method: "GET",
+    re: /^\/mcp$/,
+    need: "any", // any valid token; tools gate themselves (recall=read, remember=propose)
+    handler: (request, env, scope) => handleMcp(request, env, scope),
+  },
+  {
+    method: "POST",
+    re: /^\/mcp$/,
+    need: "any",
+    handler: (request, env, scope) => handleMcp(request, env, scope),
   },
 ];
 
