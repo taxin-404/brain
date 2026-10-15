@@ -103,13 +103,13 @@ calls it and returns `{applied:true, kind, procedure_id, version}`;
 `handleApproveProcedure(request, env, id)`; route
 `POST /^\/v1\/procedures\/([^/]+)\/approve$/` need admin.
 
-- [ ] **Step 1: Tests** — draft → approved + audit (`approve_procedure`);
+- [x] **Step 1: Tests** — draft → approved + audit (`approve_procedure`);
   second approve → 409; unknown → 404; deprecated → 409; **MCP_READ and
   MCP_PROPOSE tokens → 403 on the approve route and on apply**; ADMIN apply
   of an external-evidence procedure → 400 `untrusted_origin`.
-- [ ] **Step 2: Run and watch fail.**
-- [ ] **Step 3: Implement** gate + route.
-- [ ] **Step 4: Gate + commit** — `feat(procedures): human approval gate`.
+- [x] **Step 2: Run and watch fail.**
+- [x] **Step 3: Implement** gate + route.
+- [x] **Step 4: Gate + commit** — `feat(procedures): human approval gate`.
 
 ### Task 3 — read routes
 

@@ -2,7 +2,7 @@ import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { newEventId } from "../src/crypto";
 import { applyProposal, undoProposal } from "../src/review";
-import { installFakeVectorize } from "./helpers";
+import { bearer, call, installFakeVectorize } from "./helpers";
 
 const seedEvent = async (actor: string, trust: number): Promise<string> => {
   const id = newEventId();
@@ -173,5 +173,73 @@ describe("procedure promotion", () => {
     const pid = await seedProposal({ name: "No undo procedure", steps: ["x"] });
     await applyProposal(env, pid, { actor: "user" });
     await expect(undoProposal(env, pid, { actor: "user" })).rejects.toMatchObject({ code: "unsupported" });
+  });
+});
+
+describe("procedure approval gate", () => {
+  beforeEach(() => {
+    installFakeVectorize();
+  });
+
+  const seedDraft = async (name: string): Promise<string> => {
+    const pid = await seedProposal({ name, steps: ["step"] });
+    const res = await applyProposal(env, pid, { actor: "user" });
+    return res.procedure_id!;
+  };
+
+  it("approves a draft through the ADMIN route and audits it", async () => {
+    const id = await seedDraft("Gate approve");
+    const res = await call("POST", `/v1/procedures/${id}/approve`, undefined, bearer(env, "ADMIN"));
+    expect(res.status).toBe(200);
+    const body = await res.json<{ id: string; status: string }>();
+    expect(body).toMatchObject({ id, status: "approved" });
+
+    const row = await procedureRow(id);
+    expect(row?.status).toBe("approved");
+    const audit = await env.BRAIN_DB.prepare(
+      `SELECT count(*) AS n FROM audit_log WHERE action = 'approve_procedure' AND target_id = ?1`,
+    )
+      .bind(id)
+      .first<{ n: number }>();
+    expect(audit?.n).toBe(1);
+  });
+
+  it("409s a second approval, a deprecated procedure, and 404s unknown ids", async () => {
+    const id = await seedDraft("Gate conflicts");
+    expect((await call("POST", `/v1/procedures/${id}/approve`, undefined, bearer(env, "ADMIN"))).status).toBe(200);
+    const again = await call("POST", `/v1/procedures/${id}/approve`, undefined, bearer(env, "ADMIN"));
+    expect(again.status).toBe(409);
+    expect((await again.json<{ error: string }>()).error).toBe("conflict");
+
+    await env.BRAIN_DB.prepare(`UPDATE procedures SET status = 'deprecated' WHERE id = ?1`).bind(id).run();
+    expect((await call("POST", `/v1/procedures/${id}/approve`, undefined, bearer(env, "ADMIN"))).status).toBe(409);
+
+    expect((await call("POST", `/v1/procedures/nope/approve`, undefined, bearer(env, "ADMIN"))).status).toBe(404);
+  });
+
+  it("never lets an agent token approve or apply (self-approval impossible)", async () => {
+    const id = await seedDraft("Gate agent");
+    for (const scope of ["MCP_READ", "MCP_PROPOSE"] as const) {
+      expect((await call("POST", `/v1/procedures/${id}/approve`, undefined, bearer(env, scope))).status).toBe(403);
+    }
+    const row = await procedureRow(id);
+    expect(row?.status).toBe("draft"); // untouched by the refused attempts
+
+    const pid = await seedProposal({ name: "Agent apply attempt", steps: ["x"] });
+    for (const scope of ["MCP_READ", "MCP_PROPOSE"] as const) {
+      expect((await call("POST", `/v1/proposals/${pid}/apply`, undefined, bearer(env, scope))).status).toBe(403);
+    }
+    const proposal = await env.BRAIN_DB.prepare(`SELECT status FROM proposals WHERE id = ?1`)
+      .bind(pid)
+      .first<{ status: string }>();
+    expect(proposal?.status).toBe("pending");
+  });
+
+  it("refuses external-evidence promotion through the REST apply with 400 untrusted_origin", async () => {
+    const evExt = await seedEvent("external", 0.4);
+    const pid = await seedProposal({ name: "External REST procedure", steps: ["x"] }, evExt);
+    const res = await call("POST", `/v1/proposals/${pid}/apply`, undefined, bearer(env, "ADMIN"));
+    expect(res.status).toBe(400);
+    expect((await res.json<{ error: string }>()).error).toBe("untrusted_origin");
   });
 });

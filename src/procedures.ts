@@ -1,6 +1,7 @@
 import { writeAudit } from "./audit";
 import { newEventId } from "./crypto";
 import type { Env } from "./env";
+import { json } from "./http";
 import { ReviewError, type ReviewActor } from "./review";
 
 /** Procedural memory (design §8 phase 5). Procedure proposals land through the
@@ -176,4 +177,48 @@ export async function promoteProcedureProposal(
     reason: opts.reason,
   });
   return { procedure_id: target.id, version };
+}
+
+/** Human approval gate: the only path to `approved`, reachable exclusively
+ *  through the ADMIN REST route (never an MCP tool). */
+export async function approveProcedure(
+  env: Env,
+  procedureId: string,
+  opts: { now?: number } = {},
+): Promise<{ id: string; status: string }> {
+  const db = env.BRAIN_DB;
+  const now = opts.now ?? Date.now();
+  const row = await db
+    .prepare(`SELECT id, status FROM procedures WHERE id = ?1`)
+    .bind(procedureId)
+    .first<{ id: string; status: string }>();
+  if (!row) throw new ReviewError("not_found", "procedure not found");
+  if (row.status === "approved") throw new ReviewError("conflict", "procedure is already approved");
+  if (row.status === "deprecated") throw new ReviewError("conflict", "procedure is deprecated");
+
+  await db.prepare(`UPDATE procedures SET status = 'approved' WHERE id = ?1`).bind(procedureId).run();
+  await writeAudit(db, {
+    actor: "user",
+    action: "approve_procedure",
+    targetType: "procedure",
+    targetId: procedureId,
+    before: { status: row.status },
+    after: { status: "approved" },
+    reason: "human approval gate",
+  });
+  return { id: procedureId, status: "approved" };
+}
+
+const approveErrorStatus = (code: string): number => (code === "not_found" ? 404 : code === "conflict" ? 409 : 400);
+
+/** POST /v1/procedures/:id/approve — ADMIN only. */
+export async function handleApproveProcedure(env: Env, procedureId: string): Promise<Response> {
+  try {
+    return json(await approveProcedure(env, procedureId));
+  } catch (err) {
+    if (err instanceof ReviewError) {
+      return json({ error: err.code, message: err.message }, approveErrorStatus(err.code));
+    }
+    throw err;
+  }
 }
