@@ -33,3 +33,10 @@ Task 2: Ruling: bind-param safety — evidence-unit query chunks ids in batches 
 Task 2: Ruling: idempotence test asserts no re-merge of the same pair (merged 0, victim stays superseded) rather than "zero calls" — sibling tests in the shared DB can legitimately leave other candidate groups for later runs. Zero-call-when-empty is covered by the expiry-only test.
 Task 2: Prompt: spec §6 [CONSOLIDATION] text verbatim + a JSON interface appendix (input shape, output shape, ids-only rule) — same pattern as the Phase-2 FACT prompt additions.
 Task 2: complete (commits 4e691c3..7fe9007, tests: npx vitest run →    Duration  24.72s (transform 2.99s, setup 29.59s, import 4.19s, tests 19.45s, environment 2ms))
+
+Task 3: Ruling: reflection window is bounded on both ends — facts with `learned_at BETWEEN start AND end`, events with `ts BETWEEN start AND end` (a period's reflection covers what was learned inside the period, not older facts re-confirmed recently). Empty facts → `{skipped:true, id:null}` with no LLM call and no row; degraded runs still store the row (empty insights JSON) because they carry audit value.
+Task 3: Ruling: insight post-validation — trim text, intersect ids with the sent set, dedupe; drop insights with empty text or no valid ids; cap 5; if zero survive → degraded:true (model produced nothing usable), row still stored.
+Task 3: Ruling: `reflection_sources` gets one row per unique fact id across surviving insights (event_id NULL — evidence linkage is fact-level in v1).
+Task 3: Ruling: latest-route test determinism — created_at ties broken by id made "newest" random under a shared DB; test now creates a strictly-newer run instead of trusting ordering. Route itself keeps `ORDER BY created_at DESC, id DESC`.
+Task 3: Prompt: spec §6 [REFLECTION] text verbatim + JSON interface appendix (input shape, output shape, ids-from-input rule) — same Phase-2 pattern.
+Task 3: complete (commits 6370b0a..2732c89, tests: npx vitest run →    Duration  25.27s (transform 2.98s, setup 30.68s, import 4.56s, tests 19.78s, environment 7ms))
