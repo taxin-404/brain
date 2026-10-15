@@ -259,11 +259,11 @@ sweep on `*/30` only; AUDIT actions free-form strings.
   close-out)
 - Mirror this plan to `/home/taxin/Work/docs/superpowers/plans/`.
 
-- [ ] **Step 1: Full gate** — unprefixed `npx vitest run` + `npx tsc --noEmit`.
-- [ ] **Step 2: README** Phase 4 section (4 crons, merge rules, retirement,
+- [x] **Step 1: Full gate** — unprefixed `npx vitest run` + `npx tsc --noEmit`.
+- [x] **Step 2: README** Phase 4 section (4 crons, merge rules, retirement,
   reflections, health) + status line.
-- [ ] **Step 3: Tick every box in this plan; ledger close-out; mirror.**
-- [ ] **Step 4: Commit** — `docs: close phase 4 (crons + consolidation + reflections)`.
+- [x] **Step 3: Tick every box in this plan; ledger close-out; mirror.**
+- [x] **Step 4: Commit** — `docs: close phase 4 (crons + consolidation + reflections)`.
 
 ## Merge + acceptance (closing — one push)
 

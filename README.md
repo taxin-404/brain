@@ -111,6 +111,41 @@ be undone.
   restored the original fact. Full evidence in the
   [Phase 3 plan](docs/plans/2026-10-15-brain-phase-3.md) closing section.
 
+## Phase 4 (consolidation)
+
+The brain keeps itself tidy on four crons: the 30-minute sweep, a nightly
+consolidation pass, and weekly/monthly reflections.
+
+- **Crons:** `*/30` sweep (extract + embed), `0 3 * * *` consolidation,
+  `0 4 * * 1` weekly reflection, `0 4 1 * *` monthly reflection. The scheduled
+  handler dispatches on the trigger string (`routeCron`); unknown triggers log
+  and no-op; every job is wrapped so a cron never dies silently.
+- **Retirement:** active `temporary` facts past `expires_at` →
+  `status='archived'`, `expired_at` set, vector pruned, edge closed, audit
+  `expire` (≤100/run; text kept for `why`).
+- **Consolidation (one model call per run, ≤20 groups / ≤200 facts):** active
+  `inferred` facts grouped by (subject, predicate); a group reaches the model
+  only when ≥2 distinct evidence units (session + UTC calendar day) back it.
+  Merges apply only when the victim adds ≥1 new unit; confidence = noisy-OR
+  over distinct units capped 0.85; sources unioned, `first_seen=min`,
+  `last_confirmed=max`; the victim is soft-superseded (`superseded_by` =
+  survivor). Deleted/restricted material never serializes. Conflicts are
+  counted and reported, never resolved. Model failure → `degraded` run;
+  deterministic stages still apply; every run lands in `consolidation_runs`
+  + audit.
+- **Reflections:** weekly (last 7d) / monthly (last 30d) insight sets (≤300
+  facts, ≤80 events in-window) stored as JSON with `reflection_sources`
+  evidence; restricted and purged material filtered before the prompt and the
+  model's fact ids re-intersected with what was sent; an empty window skips
+  without a model call; degraded runs still store a row.
+- **Routes:** `POST /v1/consolidate` (admin ops kick, mirrors `/v1/extract`),
+  `POST /v1/reflect {period}` (admin), `GET /v1/reflections/latest` (read) →
+  newest reflection + fact ids (404 when none).
+- **Health:** `consolidation.last_run` summary (id, finished_at, merged,
+  superseded, conflicts, pruned) + `reflections` count.
+- **Eval:** `test/eval-consolidation.test.ts` pins the §8 "done when": cross-unit
+  merges only, tombstones honored, restricted never serialized, vectors pruned.
+
 ## Read-first map
 
 | Doc | What it is |
@@ -119,9 +154,11 @@ be undone.
 | [`docs/plans/2026-10-15-brain-phase-0-1.md`](docs/plans/2026-10-15-brain-phase-0-1.md) | Execution plan (Phase 0/1) — 15 tasks with exact interfaces and tests |
 | [`docs/plans/2026-10-15-brain-phase-2.md`](docs/plans/2026-10-15-brain-phase-2.md) | Phase 2 plan — semantic layer (extraction, embeddings, search blend) |
 | [`docs/plans/2026-10-15-brain-phase-3.md`](docs/plans/2026-10-15-brain-phase-3.md) | Phase 3 plan — review engine, why/entity views, contradictions |
+| [`docs/plans/2026-10-15-brain-phase-4.md`](docs/plans/2026-10-15-brain-phase-4.md) | Phase 4 plan — crons, consolidation, reflections, health |
 | [`.superpowers/sdd/2026-10-15-brain-phase-0-1/progress.md`](.superpowers/sdd/2026-10-15-brain-phase-0-1/progress.md) | Running ledger — rulings, gotchas, environment facts. **Read before changing anything.** |
 | [`.superpowers/sdd/2026-10-15-brain-phase-2/progress.md`](.superpowers/sdd/2026-10-15-brain-phase-2/progress.md) | Phase 2 ledger — rulings + gotchas |
 | [`.superpowers/sdd/2026-10-15-brain-phase-3/progress.md`](.superpowers/sdd/2026-10-15-brain-phase-3/progress.md) | Phase 3 ledger — rulings + gotchas |
+| [`.superpowers/sdd/2026-10-15-brain-phase-4/progress.md`](.superpowers/sdd/2026-10-15-brain-phase-4/progress.md) | Phase 4 ledger — rulings + gotchas |
 | `.superpowers/sdd/2026-10-15-brain-phase-0-1/task-N-brief.md` | Per-task briefs (interfaces, verbatim tests) |
 | [`docs/key-rotation.md`](docs/key-rotation.md) | PAYLOAD_KEK rotation procedure |
 
@@ -129,12 +166,14 @@ be undone.
 
 ```
 src/            Worker source — routes, auth, crypto, redact, budget, ingest,
-                purge, audit, rebuild (FTS5), search, blocks, mcp, sweep, health
+                purge, audit, rebuild (FTS5), search, blocks, mcp, sweep,
+                extract, factstore, graph, review, consolidate, reflect, health
 migrations/     D1 schema 0001–0005 (wrangler d1 migrations apply)
 test/           vitest suite (@cloudflare/vitest-plugin, D1 via miniflare)
 plugin/         OpenCode capture plugin — event-sourced capture + diagnostics (Tasks 13–14)
 docs/           spec + plan + key rotation
-wrangler.jsonc  Worker config: D1 brain-db, R2 brain-raw, cron "*/30 * * * *",
+wrangler.jsonc  Worker config: D1 brain-db, R2 brain-raw, crons (*/30 sweep,
+                nightly consolidation, weekly/monthly reflections),
                 keep_vars + secrets.required (see Deploy & CI)
 ```
 
@@ -221,6 +260,9 @@ builds.
 | 13 | OpenCode capture plugin (`plugin/`) | ✅ |
 | 14 | Phase 1 acceptance — live capture + MCP recall proven, race fix | ✅ |
 | 15 | keyword eval harness: recall@5 ≥ 0.9 regression gate (12 real pairs) | ✅ |
+| — | Phase 2: semantic layer (extraction, embeddings, hybrid search) | ✅ |
+| — | Phase 3: review engine, why/entity views, deterministic contradictions | ✅ |
+| — | Phase 4: crons, consolidation, reflections, health | ✅ |
 
 ## For AI agents
 
