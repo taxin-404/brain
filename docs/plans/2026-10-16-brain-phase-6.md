@@ -103,13 +103,13 @@ Spec anchors that pin the behavior:
 **Files:** Create `src/connector-github.ts`; modify `src/index.ts`; create
 `test/connector-github.test.ts`.
 
-- [ ] **Step 1: Tests** (MSW stubs api.github.com) — commits map to events
+- [x] **Step 1: Tests** (MSW stubs api.github.com) — commits map to events
   (deterministic id, source/actor/session/excerpt/payload, ts from commit
   date); re-sync of the same response stores 0 new (duplicates); per-repo
   error surfaces without failing others; caps/validation 400s; ADMIN-only.
-- [ ] **Step 2: Run and watch fail.**
-- [ ] **Step 3: Implement** fetch + mapping + route.
-- [ ] **Step 4: Gate + commit** — `feat(connector): github activity sync`.
+- [x] **Step 2: Run and watch fail.**
+- [x] **Step 3: Implement** fetch + mapping + route.
+- [x] **Step 4: Gate + commit** — `feat(connector): github activity sync`.
 
 ### Task 2 — export (backup) + links
 

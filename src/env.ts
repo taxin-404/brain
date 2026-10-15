@@ -11,6 +11,8 @@ export interface Env {
   ADMIN_TOKEN: string;
   AI_GATEWAY_BASE: string;
   GEMINI_API_KEY: string;
+  /** Optional: raises GitHub API rate limits for the connector; unauthenticated works for public repos. */
+  GITHUB_TOKEN?: string;
 }
 export const TRUST = { user: 1.0, assistant: 0.9, tool: 0.7, external: 0.4 } as const;
 export function canRead(scope: Scope): boolean {

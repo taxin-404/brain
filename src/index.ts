@@ -13,6 +13,7 @@ import { handleSearch } from "./search";
 import { handleGetBlocks, handlePutBlock } from "./blocks";
 import { handleMcp } from "./mcp";
 import { handleListProposals } from "./proposals";
+import { handleGithubSync } from "./connector-github";
 import { handleApproveProcedure, handleGetProcedure, handleListProcedures } from "./procedures";
 import { handleFactReview, handleProposalReview } from "./review";
 import { runSweep } from "./sweep";
@@ -127,6 +128,12 @@ const ROUTES: Array<{ method: string; re: RegExp; need: Need; handler: Handler }
     re: /^\/v1\/procedures\/([^/]+)$/,
     need: "read",
     handler: (_request, env, _scope, _ctx, match) => handleGetProcedure(env, match[1]),
+  },
+  {
+    method: "POST",
+    re: /^\/v1\/connectors\/github\/sync$/,
+    need: "admin",
+    handler: (request, env) => handleGithubSync(request, env),
   },
   {
     method: "GET",
