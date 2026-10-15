@@ -28,7 +28,9 @@ validated live 2026-10-15 — via Cloudflare AI Gateway `brain` (pass-through
 `x-goog-api-key` from Worker secret `GEMINI_API_KEY`); Cloudflare Vectorize
 `brain-memory` (768-dim, cosine, metadata
 `{fact_id, type, status, sensitivity, embedding_model, updated_at}`);
-`fetchMock` from `cloudflare:test` for zero-network tests.
+`@msw/cloudflare` (`setupNetwork()` + `msw` `http.post` handlers) for zero-network
+tests — `fetchMock` does not exist in `@cloudflare/vitest-plugin` 1.4.2, and
+Vectorize has no local simulator (tests fake it via `vi.spyOn(env.VECTORIZE, …)`).
 
 **Spec:** `docs/design-v1.2.md` — §8 (Phase 2 row), §1 (pipeline diagram), §4
 (facts/entities/proposals schema), §5 (REST + MCP + review tiers), §6 (prompts:
@@ -42,8 +44,9 @@ live acceptance.
 
 **Non-negotiables (every executor session):**
 
-- **Free-tier rules (README):** zero network in tests — every test file that can
-  trigger model calls activates `fetchMock` and `disableNetConnect()`. Live
+- **Free-tier rules (README):** zero network in tests — `test/setup.ts` runs
+  `setupNetwork()` from `@msw/cloudflare`, and each test registers handlers for
+  every outbound call it expects. Live
   calls only via capped sweep / manual kick / `scripts/eval-live.mjs` (owner-run,
   single-shot). Never loop against `*.workers.dev`.
 - **Never** deploy with `--env prod`; never add a preview trigger; never print
@@ -152,16 +155,21 @@ live acceptance.
 
 ## Task 0 — Ops prerequisites (no code commit; record results in the ledger)
 
-- [ ] Vectorize index: `npx wrangler vectorize create brain-memory --dimensions=768 --metric=cosine`
+- [x] Vectorize index: `npx wrangler vectorize create brain-memory --dimensions=768 --metric=cosine`
       (fallback: dashboard → Vectorize → Create index, 768 dims, cosine).
 - [ ] Metadata indexes (filter fields): `npx wrangler vectorize create-metadata-index brain-memory --property-name=type --type=string`
       and the same for `status` and `sensitivity` (older wrangler spellings may
       use `--propertyName`; check `npx wrangler vectorize --help`).
+      Status 2026-10-15: all three accepted ("enqueued" mutations) but
+      `list-metadata-index` still shows none — re-verify **active** before merge.
 - [ ] AI Gateway: try the API with the wrangler OAuth token —
       `POST /accounts/{id}/ai-gateway/gateways` body `{"id":"brain","name":"brain"}`.
       If perms fail: dashboard → AI Gateway → Create gateway, id `brain`
       (enable logs by default). Record the outcome.
-- [ ] `GEMINI_API_KEY` Worker secret — **already done 2026-10-15** (verified via
+      **Outcome 2026-10-15: wrangler OAuth rejected (`Authentication error`
+      10000); no CLI or token route available — owner action: create gateway id
+      `brain` in the dashboard (≈30s). Live extraction 404s until it exists.**
+- [x] `GEMINI_API_KEY` Worker secret — **already done 2026-10-15** (verified via
       `wrangler secret list`, 6 secrets). No action.
 - [ ] Owner reminder at merge: Google Cloud billing budget alert (~$5/mo).
 
@@ -170,7 +178,7 @@ live acceptance.
 **Files:** `migrations/0006_extractions.sql`, `wrangler.jsonc`, `src/env.ts`,
 `vitest.config.ts`, `test/schema.test.ts`, `test/smoke.test.ts`
 
-- [ ] Migration (exact SQL):
+- [x] Migration (exact SQL):
   ```sql
   CREATE TABLE extractions (
     event_id TEXT PRIMARY KEY REFERENCES events(id),
@@ -186,18 +194,21 @@ live acceptance.
   );
   CREATE INDEX idx_extractions_status ON extractions(status);
   ```
-- [ ] `wrangler.jsonc`: add
+- [x] `wrangler.jsonc`: add
       `"vectorize": [{ "binding": "VECTORIZE", "index_name": "brain-memory" }]`,
       `"vars": { "AI_GATEWAY_BASE": "https://gateway.ai.cloudflare.com/v1/1ce49401e2d9c63449f7621e4f5e10e9/brain/google-ai-studio" }`,
       and `"GEMINI_API_KEY"` appended to `secrets.required`.
-- [ ] `src/env.ts`: `VECTORIZE: VectorizeIndex; AI_GATEWAY_BASE: string; GEMINI_API_KEY: string;`
-- [ ] `vitest.config.ts` bindings: add `GEMINI_API_KEY: "dev-gemini"`,
+- [x] `src/env.ts`: `VECTORIZE: VectorizeIndex; AI_GATEWAY_BASE: string; GEMINI_API_KEY: string;`
+- [x] `vitest.config.ts` bindings: add `GEMINI_API_KEY: "dev-gemini"`,
       `AI_GATEWAY_BASE: "https://gw.test/google-ai-studio"`.
-- [ ] RED → GREEN: `test/schema.test.ts` extended — `extractions` exists with the
-      exact columns above; `test/smoke.test.ts` extended — Vectorize roundtrip in
-      tests: `env.VECTORIZE.insert` 2 vectors, `query` returns the nearer one
-      in the test runtime (proves the binding works in workerd).
-- [ ] Gate; commit `feat(phase2): extraction queue migration + vectorize/gateway bindings`.
+- [x] RED → GREEN: `test/schema.test.ts` extended — `extractions` exists with the
+      exact columns above; `test/smoke.test.ts` extended — Vectorize has **no
+      local simulator** (miniflare warns and the binding throws "needs to be run
+      remotely"), so the smoke asserts the delivered test seam instead: an
+      in-memory fake installed on `env.VECTORIZE` through the test-env proxy.
+      The real binding + metadata indexes are proven at live acceptance
+      (single-shot).
+- [x] Gate; commit `feat(phase2): extraction queue migration + vectorize/gateway bindings`.
 
 ## Task 2 — `src/llm.ts`: Gemini client via AI Gateway
 
@@ -228,11 +239,12 @@ export async function embedTexts(env: Env, texts: string[]): Promise<number[][]>
 - [ ] `embedTexts`: POST `${env.AI_GATEWAY_BASE}/v1beta/models/gemini-embedding-001:batchEmbedContents`
       body `{requests: chunk.map(text => ({ model: "models/gemini-embedding-001", content: { parts: [{ text }] }, outputDimensionality: 768 }))}`;
       assert every `values.length === 768` else `LlmError("parse")`.
-- [ ] Tests (`fetchMock`; `fetchMock.activate(); fetchMock.disableNetConnect();`
-      in `beforeEach`): URL + method + `x-goog-api-key` header asserted via
-      interceptor; 500-then-200 → success (2 calls); 3×500 → `LlmError` http;
-      malformed body → parse error; embeddings: 3 texts → 3×768; 12 texts → 2
-      interceptor calls (chunking).
+- [ ] Tests (MSW via `@msw/cloudflare`: `setupNetwork()` in `test/setup.ts`,
+      `http.post` handlers per test — note: `fetchMock` does not exist in
+      `@cloudflare/vitest-plugin` 1.4.2): URL + method + `x-goog-api-key` header
+      asserted in the handler; 500-then-200 → success (2 calls); 3×500 →
+      `LlmError` http; malformed body → parse error; embeddings: 3 texts →
+      3×768; 12 texts → 2 requests (chunking).
 - [ ] Gate; commit `feat(phase2): gemini client via ai gateway (json + embeddings)`.
 
 ## Task 3 — `src/prompts.ts` + `src/facts.ts`: prompts, parsing, rules (pure)
@@ -314,7 +326,7 @@ export async function processExtractions(
 - [ ] Facts insert uses `INSERT` (ids via the existing ulid helper in
       `src/crypto.ts` — reuse `newEventId`? No: keep a local `newFactId()` in
       `src/facts.ts` using the same generator exported from `crypto.ts`).
-- [ ] Tests (fetchMock + real D1; canned model responses):
+- [ ] Tests (MSW handlers + real D1; canned model responses):
       happy path → 2 facts, entity `user`=`Person` created, `facts_fts` row
       present, `fact_sources` row present, audit row, extraction row `done`;
       dedupe → second run with the same fact bumps `last_confirmed_at` (1 row,
@@ -348,9 +360,10 @@ export function fakeVec(text: string, dims = 768): number[] // deterministic uni
       next sweep); never throw out of the run. Call `embedPendingFacts` at the
       end of `processExtractions` and return its counts in `ExtractionRun` +
       `embedded`.
-- [ ] Tests (real Vectorize sim + fetchMock returning `fakeVec` of the input
-      text): facts get `vec_id` set; `env.VECTORIZE.query(fakeVec("seed text"))`
-      returns that fact id first; restricted fact never embedded; metadata exact;
+- [ ] Tests (Vectorize faked via `vi.spyOn(env.VECTORIZE, …)` + MSW returning
+      `fakeVec` of the input text): facts get `vec_id` set;
+      `env.VECTORIZE.query(fakeVec("seed text"))` returns that fact id first;
+      restricted fact never embedded; metadata exact;
       embedding 500s → `failed ≥ 1`, `vec_id` stays NULL, function still returns.
 - [ ] Gate; commit `feat(phase2): fact embeddings + vectorize upsert`.
 
@@ -436,7 +449,7 @@ export async function expireProposals(env: Env, now?: number): Promise<number>
 - [ ] `POST /v1/extract` (admin): body `{ max_events?, max_calls? }` clamped to
       `EXTRACTION_CAPS.manual` → `json(await processExtractions(env, …))`.
 - [ ] Tests: sweep expires proposals exactly at the boundary; sweep performs
-      extraction with fetchMock (facts created, `extracted.facts` reported);
+      extraction via MSW handlers (facts created, `extracted.facts` reported);
       health counts reflect seeded statuses; `/v1/extract` admin-only (403 read,
       403 propose, 200 admin) and clamps (`max_events: 1000` → 100).
 - [ ] Gate; commit `feat(phase2): sweep extraction + proposal expiry + manual kick`.
@@ -451,15 +464,15 @@ ledger.
       **no lexical overlap** with the expected fact string (e.g. q "which code
       editor does the user like", expect "neovim"). Docs note: offline run
       validates the retrieval machinery with a deterministic fake-embedding
-      oracle (fetchMock maps each case's query to its target text's `fakeVec`);
+      oracle (MSW maps each case's query to its target text's `fakeVec`);
       true semantic quality is the live eval's job.
 - [ ] `test/eval-semantic.test.ts`: seed one fact per case (direct inserts +
-      `fakeVec(expectText)` vectors via `env.VECTORIZE`), fetchMock oracle for
+      `fakeVec(expectText)` vectors via `env.VECTORIZE`), MSW oracle for
       query embeddings, assert recall@5 ≥ 0.9 across cases + `degraded` absent.
       Also: the **injection test** — one canned extraction response with
       `injection_suspected` → zero facts + flag set; the **restricted
       zero-calls test** — ingest restricted event, run extraction, assert
-      fetchMock received no request containing that excerpt.
+      MSW saw no request containing that excerpt.
 - [ ] `scripts/eval-live.mjs` (owner-run; ≤ ~10 single-shot requests; reads
       `.secrets/prod.env` admin token): `node scripts/eval-live.mjs --q "…"`
       prints top-5 facts; `--seed` ingests two notes + one `/v1/extract` kick +
