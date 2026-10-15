@@ -208,7 +208,7 @@ the portable payload page at 100 objects.
 
 **Files:** Modify `src/crypto.ts`, `src/exporter.ts`; extend `test/export.test.ts`.
 
-- [ ] **Step 1: Tests** — seed >400 events: first export call ends
+- [x] **Step 1: Tests** — seed >400 events: first export call ends
   `state:"running"` with ≤400 event rows in the first part; resume until done;
   every seeded event present exactly once in the artifact.
 - [x] **Step 2: Run and watch fail.**
@@ -252,13 +252,26 @@ try/catch each part delete (sweep is the backstop).
 ## Merge + acceptance (closing — one push)
 
 - [x] Merge `phase-6` → `master`, push (done `71a455d`); CI build `5ad08322…` success.
-- [ ] Live acceptance, single-shot each:
+- [x] Live acceptance, single-shot each:
       1. `POST /v1/connectors/github/sync` (ADMIN) with `taxin-404/brain`
          lookback 720 h → fetched ≥1, stored, duplicates on second call.
+         Evidence: sync#1 `{fetched:5, stored:5, duplicates:0}`; sync#2
+         `{stored:0, duplicates:5}` (build `5ad08322…`).
       2. `GET /v1/export?profile=backup` → job → resume `?job=` until
          `done:true` (free-plan slices) → download → NDJSON header + rows.
+         Evidence (build `34de4b1e…`, commit `42a9356`): start running;
+         download-while-running 409; 17 resumes all 200 → done, 18 parts;
+         download 200, 7,042,918 bytes, 1,801 lines, exactly 1 header,
+         1,780 payload rows; audit export row present.
       3. `GET /v1/export?profile=portable` without token → 403; mint confirm
          token → export → resume → download once → second download 404s (R2
-         object gone).
+         object gone). Evidence (same build): no-token 403; 22 resumes all
+         200 → done, 23 parts; download#1 200, 1,894,531 bytes, exactly
+         1 header, 1,787 payload rows, zero `"wrapped_key"` fields, no
+         event_keys table; download#2 404. Decrypted 201 / null 1,586: the
+         nulls are pre-existing foreign-key payloads from the owner's `oc_*`
+         bridge ingestion (offline check: ULID-era payloads 199/199 decrypt
+         with the escrowed KEK; 2 orphans) — null-degradation is the
+         designed behavior; reported to the owner, not a phase-6 defect.
 - [ ] Owner actions (reminder only): Google Cloud budget alert; key rotation
       from the Phase-2 ledger; escrow `.secrets/prod.env` then delete.
