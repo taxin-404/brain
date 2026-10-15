@@ -6,7 +6,9 @@ import type { Env as BrainEnv, Scope } from "../src/env";
 // ProvidedEnv, which does not exist in v5 — see ledger ruling).
 declare global {
   namespace Cloudflare {
-    interface Env extends BrainEnv {}
+    interface Env extends BrainEnv {
+      TEST_MIGRATIONS: import("@cloudflare/vitest-plugin").D1Migration[];
+    }
     interface GlobalProps {
       mainModule: typeof import("../src/index");
     }
