@@ -1,6 +1,8 @@
 import { writeAudit } from "./audit";
 import type { Env } from "./env";
+import { resolveObjectEntity } from "./entities";
 import { newFactId, type FactKind } from "./facts";
+import { linkFactEdges } from "./graph";
 import { EMBEDDING_MODEL } from "./llm";
 
 /** The single fact write path. Extraction, the review engine, and
@@ -64,6 +66,24 @@ export async function createFact(env: Env, input: CreateFactInput): Promise<stri
   await env.BRAIN_DB.prepare(`INSERT OR IGNORE INTO fact_sources (fact_id, event_id) VALUES (?1, ?2)`)
     .bind(id, input.sourceEventId)
     .run();
+
+  // Graph (Phase 3): active facts link to a known object entity and land as
+  // edges; disputed facts stay out of the graph (their relation is unverified).
+  if ((input.status ?? "active") === "active") {
+    const obj = await resolveObjectEntity(env.BRAIN_DB, input.objectText);
+    if (obj) {
+      await linkFactEdges(env, {
+        id,
+        subjectId: input.subjectId,
+        predicate: input.predicate,
+        objectEntityId: obj.id,
+        confidence: input.confidence,
+        validAt: input.validAt,
+        sourceEventId: input.sourceEventId,
+        now,
+      });
+    }
+  }
 
   await writeAudit(env.BRAIN_DB, {
     actor: "system",

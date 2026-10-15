@@ -184,14 +184,14 @@ you can also push") before execution; the ledger records it.
   norm` (including SELF aliases, e.g. `taxin` → user), `INSERT OR IGNORE`
   into `entity_aliases` (`alias` = trimmed raw text, `norm_alias` = norm).
 
-- [ ] **Step 1: Tests** — alias rows appear for `taxin 404`/`Taxin404` and a
+- [x] **Step 1: Tests** — alias rows appear for `taxin 404`/`Taxin404` and a
   case-variant project mention; object link only when entity exists; edge row
   fields pinned; `GET /v1/entities/:id` payload shape; restricted fact hidden
   from non-admin view.
-- [ ] **Step 2: Run and watch fail.**
-- [ ] **Step 3: Implement** `entities.ts` additions, `src/graph.ts`, call
+- [x] **Step 2: Run and watch fail.**
+- [x] **Step 3: Implement** `entities.ts` additions, `src/graph.ts`, call
   `linkFactEdges` from `createFact`, add the route (`need: "read"`).
-- [ ] **Step 4: Gate + commit** — commit
+- [x] **Step 4: Gate + commit** — commit
   `feat(graph): aliases, object-entity links, fact edges, entity view`.
 
 ### Task 3 — Review engine: `applyProposal` / `discardProposal` / `undoProposal`
