@@ -180,6 +180,11 @@ versioned procedure — and only a human can flip the approval switch.
   MCP propose → 403 for agent tokens on apply/approve → ADMIN apply → ADMIN
   approve → approved procedure; refinement → re-approval gate; poisoned
   external origin dies with zero rows.
+- **Acceptance (2026-10-16, single-shot, post-merge):** agent proposed via MCP
+  (`01M50DDG…`, manual) → ADMIN applied (draft v1, `01M50DDW…`) → ADMIN
+  approved → approve retried with both agent tokens → **403** → final read
+  `approved`. Full evidence in the
+  [Phase 5 plan](docs/plans/2026-10-16-brain-phase-5.md) closing section.
 
 ## Read-first map
 

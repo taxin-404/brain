@@ -160,9 +160,9 @@ status, current_version, origin_trust, last_success_at, created_at}]}`;
 
 ## Merge + acceptance (closing — one push)
 
-- [ ] Merge `phase-5` → `master`, push; watch the CI build once. No migration.
-- [ ] Live acceptance, single-shot each:
-      1. `/mcp` `propose_procedure` (propose-capable token) → proposal id.
+- [x] Merge `phase-5` → `master`, push; watch the CI build once. No migration.
+- [x] Live acceptance, single-shot each:
+      1. `/mcp` `propose_procedure` (propose token) → proposal id.
       2. `POST /v1/proposals/:id/apply` (ADMIN) → draft v1 + `procedure_id`.
       3. `GET /v1/procedures/:id` (read) → draft, version 1.
       4. `POST /v1/procedures/:id/approve` (ADMIN) → approved.
@@ -171,3 +171,21 @@ status, current_version, origin_trust, last_success_at, created_at}]}`;
       6. `GET /v1/procedures/:id` → approved v1.
 - [ ] Owner actions (reminder only): Google Cloud budget alert; key rotation
       from the Phase-2 ledger.
+
+### Acceptance evidence (2026-10-16, single-shot, post-merge — master @ `3bddf57`)
+
+- **Merge:** `phase-5` fast-forwarded to master; CI build `f44b2f72…` for
+  `3bddf57` → `stopped/success`.
+- **1. Agent propose:** MCP `propose_procedure` with the propose token (cited a
+  real user event `oc_msg_1409a5d230014MxAws6uPEJwtB` as evidence) → proposal
+  `01M50DDGMPJ26GXZN9H7B6ST28`, `review_mode: manual`.
+- **2. Human apply:** `POST /v1/proposals/…/apply` (ADMIN) → `{applied: true,
+  kind: "procedure", version: 1}`, procedure
+  `01M50DDWY6WJHG12K6GQBT5G82`.
+- **3. Read:** `GET /v1/procedures/:id` (MCP_READ) → `draft`, v1, origin_trust
+  1 (user-event evidence), steps preserved verbatim.
+- **4. Human approve:** `POST /v1/procedures/…/approve` (ADMIN) →
+  `{id, status: "approved"}`.
+- **5. Agent refused:** the same approve route with MCP_READ → **403** and
+  with MCP_PROPOSE → **403** — the agent cannot self-approve on live infra.
+- **6. Final read:** `approved`, `current_version: 1`.
