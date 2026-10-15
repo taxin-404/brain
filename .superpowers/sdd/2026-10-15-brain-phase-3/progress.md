@@ -24,3 +24,10 @@ Task 2: Ruling: object→entity matching normalizes with normalizeSubjectText (t
 Task 2: Ruling: disputed facts create no edge/object link (relation unverified) — cost if wrong: disputed relation invisible in the entity view until resolved.
 Task 2: Ruling: entity-view edges are direction-relative (`dst` in `out`, `src` in `in`) per the test written first — cost if wrong: cosmetic API shape.
 Task 2: complete (commits 5955126..58b3931, tests: npx vitest run →    Duration  20.28s (transform 2.81s, setup 24.37s, import 3.02s, tests 16.49s, environment 5ms))
+
+Task 3: Ruling: factstore lifecycle fns (supersede/dispute/purge) throw plain Error on invariant violations (missing/non-active fact); user-facing refusals are ReviewError in review.ts — avoids the factstore←review circular import — cost if wrong: internal errors less typed (callers pre-check anyway).
+Task 3: Ruling: confirm-token targets are `fact:{id}` and `event:{id}` — one mint route serves both; forget apply consumes before target lookup (single-use semantics) — cost if wrong: a 404 after token consumption requires re-minting.
+Task 3: Ruling: undo of a correction closes the replacement's edge and reopens the old triple (`src+dst+rel`, invalid_at reset); edges carry no fact id — known limitation when two facts share subject+predicate+object-entity — cost if wrong: an unrelated closed edge may reopen (rare).
+Task 3: Ruling: purgeFact is idempotent (skips the FTS 'delete' when object_text is already NULL, status flip guarded) — a second forget apply on a deleted fact succeeds as a no-op.
+Task 3: purgeEventCore gained an actor param (default "user"); the apply path passes the proposal actor.
+Task 3: complete (commits 22de655..b526e21, tests: npx vitest run →    Duration  20.78s (transform 3.05s, setup 24.80s, import 3.30s, tests 16.71s, environment 2ms))
