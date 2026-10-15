@@ -463,28 +463,28 @@ export async function expireProposals(env: Env, now?: number): Promise<number>
 `scripts/eval-live.mjs`, `package.json` (`"eval:live"` script), `README.md`,
 ledger.
 
-- [ ] `eval/semantic.json`: ≥8 cases `{ q, expect }` — paraphrase queries with
+- [x] `eval/semantic.json`: ≥8 cases `{ q, expect }` — paraphrase queries with
       **no lexical overlap** with the expected fact string (e.g. q "which code
       editor does the user like", expect "neovim"). Docs note: offline run
       validates the retrieval machinery with a deterministic fake-embedding
       oracle (MSW maps each case's query to its target text's `fakeVec`);
       true semantic quality is the live eval's job.
-- [ ] `test/eval-semantic.test.ts`: seed one fact per case (direct inserts +
+- [x] `test/eval-semantic.test.ts`: seed one fact per case (direct inserts +
       `fakeVec(expectText)` vectors via `env.VECTORIZE`), MSW oracle for
       query embeddings, assert recall@5 ≥ 0.9 across cases + `degraded` absent.
       Also: the **injection test** — one canned extraction response with
       `injection_suspected` → zero facts + flag set; the **restricted
       zero-calls test** — ingest restricted event, run extraction, assert
       MSW saw no request containing that excerpt.
-- [ ] `scripts/eval-live.mjs` (owner-run; ≤ ~10 single-shot requests; reads
+- [x] `scripts/eval-live.mjs` (owner-run; ≤ ~10 single-shot requests; reads
       `.secrets/prod.env` admin token): `node scripts/eval-live.mjs --q "…"`
       prints top-5 facts; `--seed` ingests two notes + one `/v1/extract` kick +
       polls `/v1/search` ≤5×3s and reports pass/fail per case; `--injection`
       posts the planted note, kicks, asserts the target fact never appears.
-- [ ] README: update status line + a short "Phase 2" section (models, gateway,
+- [x] README: update status line + a short "Phase 2" section (models, gateway,
       index name, caps, `eval:live`, free-tier reminder). Ledger entries for
       every ruling.
-- [ ] Gate; commits `feat(phase2): semantic eval gate + live script` and
+- [x] Gate; commits `feat(phase2): semantic eval gate + live script` and
       `docs: phase 2 (semantic) runbook`.
 
 ## Merge + acceptance (single-shot, after all gates green)

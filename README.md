@@ -3,10 +3,11 @@
 Personal neural memory for OpenCode sessions — capture, redact, encrypt at rest,
 search, and recall into future sessions. Runs on Cloudflare Workers (D1 + R2).
 
-**Status: Phase 0 delivered & live · Phase 1 complete** — all 15 planned tasks done
-(48 Worker + 3 plugin tests green, deployed live, acceptance + eval gate passed).
-Capture and MCP recall are registered globally in the owner's OpenCode config and
-proven live end-to-end (owner-approved 2026-10-15; see
+**Status: Phase 0 delivered & live · Phase 1 complete · Phase 2 (semantic) complete** — the
+memory layer now extracts durable facts through the AI Gateway, blends semantic + keyword
+search, and lands reviewable proposals: 20 test files / 113 tests green offline (zero network);
+live acceptance runs single-shot post-merge. Capture and MCP recall are registered globally in
+the owner's OpenCode config and proven live end-to-end (owner-approved 2026-10-15; see
 `.superpowers/sdd/2026-10-15-brain-phase-0-1/task-14-log.md`).
 
 ## ⚠️ Free-tier rules — every agent must read this
@@ -25,6 +26,42 @@ the account's daily free request limit in seconds. No exceptions, ever:
 - **Quotas to respect:** Workers 100k requests/day · D1 100k row-writes/day (the
   in-app `rate_budgets` breaker at 80k protects this) · Vectorize 5M stored dims ·
   Queues 10k ops/day · Gemini calls under the Google Cloud budget alert (~$5/mo).
+
+## Phase 2 (semantic)
+
+Events are projected into durable **facts**: the `*/30` sweep (and the admin
+`POST /v1/extract` kick) sends unprocessed event excerpts to Gemini through the AI
+Gateway and stores facts with bi-temporal bookkeeping, entities, and provenance.
+
+- **Models (pinned):** extraction `gemini-3.5-flash-lite`; embeddings
+  `gemini-embedding-001` at `outputDimensionality: 768`. Gateway base
+  `https://gateway.ai.cloudflare.com/v1/<account>/brain/google-ai-studio`
+  (gateway id `brain`).
+- **Vectorize:** index `brain-memory` (768 dims, cosine) with metadata indexes on
+  `type`/`status`/`sensitivity`; fact vectors are upserted at the end of each
+  extraction run (vector id = fact id).
+- **Caps & privacy:** sweep `{maxEvents: 40, maxCalls: 4}`; manual kick
+  `{maxEvents: 100, maxCalls: 10}`; retries stop after 3 attempts;
+  `privacy='restricted'` events are never queued or sent; restricted fact
+  candidates are stored redacted (`object_text='[REDACTED]'`).
+- **Search:** `GET /v1/search` returns `results` (keyword, unchanged) **and**
+  `facts` — a blended RRF of Vectorize top-20 and FTS5 top-20 with recency +
+  confidence modifiers (`degraded: true` when embeddings are unavailable).
+  `GET /v1/facts/:id` serves a fact with its source events.
+- **Proposals:** the MCP server now exposes 8 tools; `propose_correction` /
+  `propose_forget` / `propose_block_edit` / `propose_procedure` land reviewable
+  `proposals` rows (auto tier only for user-evidenced, non-sensitive corrections;
+  everything else manual). `GET /v1/proposals` lists them; pending proposals
+  expire after 14 days.
+- **Evals:** `test/eval-semantic.test.ts` gates paraphrased recall@5 ≥ 0.9 offline
+  through a deterministic fake-embedding oracle; `npm run eval:live` is the
+  owner-run live check — `--q "…"` (top-5 facts), `--seed` (plants two notes +
+  one kick + bounded polls), `--injection` (a planted injection must never land
+  as a fact). It reads `.secrets/prod.env`, prints its request count, and is
+  single-shot by construction.
+- **Free tier:** the sweep is the only recurring Gemini consumer (≤4 calls per
+  30 min plus embedding batches ≤100 facts); never loop against the deployed
+  worker — see the rules above.
 
 ## Read-first map
 
