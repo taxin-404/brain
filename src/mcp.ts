@@ -13,11 +13,21 @@ const PROPOSE_DENIED = {
 };
 
 /** Proposal tools share one reply shape; charge rejections surface as isError
- *  text with the same codes ingest uses (over_limit / breaker_open). */
-async function proposalReply(run: () => Promise<{ id: string }>) {
+ *  text with the same codes ingest uses (over_limit / breaker_open). The
+ *  reply carries the computed tier and whether an auto-tier apply already ran. */
+async function proposalReply(
+  run: () => Promise<{ id: string; review_mode: "auto" | "manual"; applied: boolean; error?: string }>,
+) {
   try {
-    const { id } = await run();
-    return { content: [{ type: "text" as const, text: JSON.stringify({ created: true, id }) }] };
+    const { id, review_mode, applied, error } = await run();
+    return {
+      content: [
+        {
+          type: "text" as const,
+          text: JSON.stringify({ created: true, id, review_mode, applied, ...(error ? { error } : {}) }),
+        },
+      ],
+    };
   } catch (err) {
     if (err instanceof ProposalError) {
       return { content: [{ type: "text" as const, text: err.code }], isError: true as const };
@@ -27,8 +37,10 @@ async function proposalReply(run: () => Promise<{ id: string }>) {
 }
 
 /** Stateless MCP server, built fresh per request. Eight tools exist. The four
- *  propose_* tools only land reviewable `proposals` rows (never apply them);
- *  apply/undo/export durable destructive actions stay behind the Bearer HTTP API. */
+ *  propose_* tools land reviewable `proposals` rows; the auto tier
+ *  (user-evidenced corrections, disputes of normal facts) applies at creation
+ *  as actor=system and stays undoable over REST. Apply/discard/undo/export and
+ *  every purge stay behind the Bearer HTTP API. */
 export function createBrainMcpServer(env: Env, scope: Scope): McpServer {
   const server = new McpServer({ name: "brain", version: "0.1.0" });
 

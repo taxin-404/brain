@@ -11,6 +11,7 @@ import { handleSearch } from "./search";
 import { handleGetBlocks, handlePutBlock } from "./blocks";
 import { handleMcp } from "./mcp";
 import { handleListProposals } from "./proposals";
+import { handleFactReview, handleProposalReview } from "./review";
 import { runSweep } from "./sweep";
 
 export type Handler = (
@@ -74,7 +75,19 @@ const ROUTES: Array<{ method: string; re: RegExp; need: Need; handler: Handler }
     method: "GET",
     re: /^\/v1\/proposals$/,
     need: "read",
-    handler: (request, env) => handleListProposals(request, env),
+    handler: (request, env, scope) => handleListProposals(request, env, scope),
+  },
+  {
+    method: "POST",
+    re: /^\/v1\/facts\/([A-Za-z0-9_-]+)\/(correct|dispute|purge)$/,
+    need: "admin",
+    handler: (request, env, scope, _ctx, match) => handleFactReview(request, env, scope, match[1], match[2]),
+  },
+  {
+    method: "POST",
+    re: /^\/v1\/proposals\/([A-Za-z0-9_-]+)\/(apply|discard|undo)$/,
+    need: "admin",
+    handler: (request, env, scope, _ctx, match) => handleProposalReview(request, env, scope, match[1], match[2]),
   },
   {
     method: "POST",

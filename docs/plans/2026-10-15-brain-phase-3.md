@@ -286,7 +286,7 @@ you can also push") before execution; the ledger records it.
 - Routes added to `ROUTES`: the six paths from Global constraints
   (`need: "admin"`).
 
-- [ ] **Step 1: Tests** — REST correction with user evidence →
+- [x] **Step 1: Tests** — REST correction with user evidence →
   `applied:true` and old fact superseded in the same response cycle; same
   without evidence → pending, `applied:false`; auto-apply where the target
   vanished → `applied:false`, proposal stays pending, no 500;
@@ -296,9 +296,9 @@ you can also push") before execution; the ledger records it.
   `sensitivity='restricted'` rows from non-admin callers;
   purge→apply requires `fact:{id}` token; discard; undo round-trip over REST;
   `computeReviewMode` unit cases for `dispute`.
-- [ ] **Step 2: Run and watch fail.**
-- [ ] **Step 3: Implement** proposals changes, review handlers, routes.
-- [ ] **Step 4: Gate + commit** —
+- [x] **Step 2: Run and watch fail.**
+- [x] **Step 3: Implement** proposals changes, review handlers, routes.
+- [x] **Step 4: Gate + commit** —
   `feat(review-http): fact review + proposal apply/discard/undo REST; auto-apply`.
 
 ### Task 5 — `GET /v1/why/:fact_id`

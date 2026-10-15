@@ -91,6 +91,11 @@ describe("computeReviewMode", () => {
     expect(computeReviewMode("forget", "normal", "user")).toBe("manual");
     expect(computeReviewMode("block_edit", "normal", "user")).toBe("manual");
     expect(computeReviewMode("procedure", "normal", "user")).toBe("manual");
+    // dispute is always auto for normal facts; the sensitive carve-out keeps it manual
+    expect(computeReviewMode("dispute", "normal", null)).toBe("auto");
+    expect(computeReviewMode("dispute", "normal", "assistant")).toBe("auto");
+    expect(computeReviewMode("dispute", "sensitive", "user")).toBe("manual");
+    expect(computeReviewMode("dispute", "restricted", "user")).toBe("manual");
   });
 });
 
@@ -175,7 +180,7 @@ describe("MCP propose tools", () => {
     expect(await budget("MCP_PROPOSE")).toBe(before);
   });
 
-  it("propose_correction errors on a missing fact and lands auto with user evidence", async () => {
+  it("propose_correction errors on a missing fact and auto-applies with user evidence", async () => {
     const missing = await callTool("MCP_PROPOSE", "propose_correction", { fact_id: "nope", correction: "c" });
     expect(missing.isError).toBe(true);
     expect(missing.text).toBe("fact not found");
@@ -188,7 +193,8 @@ describe("MCP propose tools", () => {
       evidence_event_id: eventId,
     });
     expect(ok.isError).toBe(false);
-    const { id } = JSON.parse(ok.text!) as { created: boolean; id: string };
+    const { id, applied } = JSON.parse(ok.text!) as { created: boolean; id: string; applied: boolean };
+    expect(applied).toBe(true);
 
     const p = await getProposal(id);
     expect(p).toMatchObject({
@@ -198,9 +204,19 @@ describe("MCP propose tools", () => {
       evidence_event_id: eventId,
       sensitivity: "normal",
       review_mode: "auto",
-      status: "pending",
+      status: "applied",
     });
     expect(JSON.parse(p!.payload_json)).toEqual({ fact_id: factId, correction: "new value" });
+
+    // the auto tier applied it: the old fact is superseded by the corrected one
+    const old = await env.BRAIN_DB.prepare(`SELECT status, superseded_by FROM facts WHERE id = ?1`)
+      .bind(factId)
+      .first<{ status: string; superseded_by: string | null }>();
+    expect(old?.status).toBe("superseded");
+    const nf = await env.BRAIN_DB.prepare(`SELECT object_text FROM facts WHERE id = ?1`)
+      .bind(old?.superseded_by)
+      .first<{ object_text: string }>();
+    expect(nf?.object_text).toBe("new value");
   });
 
   it("forget, block_edit and procedure always land manual", async () => {
@@ -264,7 +280,11 @@ describe("GET /v1/proposals", () => {
     expect(body.proposals.find((p) => p.id === newId)?.payload).toEqual({ note: "seeded" });
 
     const applied = await call("GET", "/v1/proposals?status=applied", undefined, bearer(env, "MCP_READ"));
-    expect((await applied.json<{ proposals: Array<{ id: string }> }>()).proposals.map((p) => p.id)).toEqual([appliedId]);
+    // other tests may have auto-applied proposals in the shared DB; assert the
+    // filter semantics (all applied, seeded one present) rather than exact set
+    const appliedBody = await applied.json<{ proposals: Array<{ id: string; status: string }> }>();
+    expect(appliedBody.proposals.every((p) => p.status === "applied")).toBe(true);
+    expect(appliedBody.proposals.map((p) => p.id)).toContain(appliedId);
 
     const limited = await call("GET", "/v1/proposals?limit=1", undefined, bearer(env, "MCP_READ"));
     expect((await limited.json<{ proposals: unknown[] }>()).proposals).toHaveLength(1);

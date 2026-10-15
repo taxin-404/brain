@@ -3,8 +3,11 @@ import { charge } from "./budget";
 import { newEventId } from "./crypto";
 import type { Env, Scope } from "./env";
 import { json } from "./http";
+// Function-level cycle with review.ts (review imports nothing from here at
+// module scope; proposals imports applyProposal which runs post-load only).
+import { applyProposal, ReviewError } from "./review";
 
-export type ProposalKind = "correction" | "forget" | "block_edit" | "procedure";
+export type ProposalKind = "correction" | "forget" | "block_edit" | "procedure" | "dispute";
 
 export const PROPOSAL_TTL_MS = 14 * 86_400_000;
 
@@ -19,14 +22,18 @@ export class ProposalError extends Error {
   }
 }
 
-/** Tier rules (design v1.2 amendment 2): auto iff reversible (corrections are)
- *  AND the evidence is an actor=user turn AND the fact is not sensitive.
- *  Forget/block_edit/procedure are always manual; so is a missing/unknown fact. */
+/** Tier rules (design v1.2 amendment 2 + one ruling): auto iff reversible
+ *  (corrections are) AND the evidence is an actor=user turn AND the fact is
+ *  not sensitive. A dispute is auto too (design: "dispute is always auto"),
+ *  with the safety carve-out that sensitive/restricted facts keep manual
+ *  review. Forget/block_edit/procedure are always manual; so is a
+ *  missing/unknown fact. */
 export function computeReviewMode(
   kind: ProposalKind,
   factSensitivity: string | null,
   evidenceActor: string | null,
 ): "auto" | "manual" {
+  if (kind === "dispute") return factSensitivity === "normal" ? "auto" : "manual";
   return kind === "correction" && factSensitivity === "normal" && evidenceActor === "user" ? "auto" : "manual";
 }
 
@@ -39,9 +46,10 @@ export interface ProposalInput {
   sensitivity?: string;
 }
 
-/** Land a reviewable proposal row (never applies anything). Charges one row
- *  like ingest; on rejection nothing is written. */
-export async function createProposal(env: Env, scope: Scope, input: ProposalInput): Promise<{ id: string }> {
+/** Land a reviewable proposal row. Charges one row like ingest; on rejection
+ *  nothing is written. When the tier computes `auto`, the proposal applies
+ *  immediately (actor=system, audited, undoable). */
+export async function createProposal(env: Env, scope: Scope, input: ProposalInput): Promise<CreateProposalResult> {
   const verdict = await charge(env.BRAIN_DB, scope, 1);
   if (verdict === "over_limit") throw new ProposalError("over_limit", "daily propose cap reached");
   if (verdict === "breaker_open") throw new ProposalError("breaker_open", "global write breaker open");
@@ -84,7 +92,30 @@ export async function createProposal(env: Env, scope: Scope, input: ProposalInpu
     after: { kind: input.kind, review_mode: reviewMode },
   });
 
-  return { id };
+  if (reviewMode === "auto") {
+    try {
+      await applyProposal(env, id, { actor: "system" });
+      return { id, review_mode: reviewMode, applied: true };
+    } catch (err) {
+      if (err instanceof ReviewError) {
+        // e.g. the target fact was superseded before the auto-apply ran:
+        // keep the row pending for manual review instead of failing the call.
+        console.log(`[proposals] auto-apply skipped for ${id}: ${err.code}`);
+        return { id, review_mode: reviewMode, applied: false, error: err.code };
+      }
+      throw err;
+    }
+  }
+
+  return { id, review_mode: reviewMode, applied: false };
+}
+
+export interface CreateProposalResult {
+  id: string;
+  review_mode: "auto" | "manual";
+  applied: boolean;
+  /** Set when an auto-tier apply was refused (row stays pending). */
+  error?: string;
 }
 
 interface ProposalRow {
@@ -101,17 +132,22 @@ interface ProposalRow {
   expires_at: number;
 }
 
-/** Newest first; default status=pending, limit 20 (≤100). */
-export async function listProposals(env: Env, opts: { status?: string; limit?: number } = {}): Promise<unknown[]> {
+/** Newest first; default status=pending, limit 20 (≤100). Restricted rows are
+ *  only listed for admin callers (design: restricted never reaches lower scopes). */
+export async function listProposals(
+  env: Env,
+  opts: { status?: string; limit?: number; includeRestricted?: boolean } = {},
+): Promise<unknown[]> {
   const status = opts.status ?? "pending";
   const limit = Math.max(1, Math.min(100, Math.trunc(opts.limit ?? 20)));
+  const includeRestricted = opts.includeRestricted ? 1 : 0;
   const { results } = await env.BRAIN_DB.prepare(
     `SELECT id, kind, payload_json, target_type, target_id, evidence_event_id, sensitivity, review_mode,
             status, created_at, expires_at
-     FROM proposals WHERE status = ?1
+     FROM proposals WHERE status = ?1 AND (sensitivity != 'restricted' OR ?3 = 1)
      ORDER BY created_at DESC, id DESC LIMIT ?2`,
   )
-    .bind(status, limit)
+    .bind(status, limit, includeRestricted)
     .all<ProposalRow>();
   return results.map(({ payload_json, ...r }) => ({ ...r, payload: JSON.parse(payload_json) }));
 }
@@ -126,11 +162,11 @@ export async function expireProposals(env: Env, now: number = Date.now()): Promi
   return res.meta.changes ?? 0;
 }
 
-export async function handleListProposals(request: Request, env: Env): Promise<Response> {
+export async function handleListProposals(request: Request, env: Env, scope: Scope): Promise<Response> {
   const url = new URL(request.url);
   const status = url.searchParams.get("status") ?? "pending";
   const limitRaw = url.searchParams.get("limit");
   let limit = limitRaw === null ? 20 : Number(limitRaw);
   if (!Number.isFinite(limit)) limit = 20;
-  return json({ proposals: await listProposals(env, { status, limit }) });
+  return json({ proposals: await listProposals(env, { status, limit, includeRestricted: scope === "ADMIN" }) });
 }

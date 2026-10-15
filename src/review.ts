@@ -1,9 +1,13 @@
 import { writeAudit } from "./audit";
 import { BLOCK_KEYS } from "./blocks";
-import type { Env } from "./env";
+import type { Env, Scope } from "./env";
 import { createFact, deleteFactVector, disputeFact, purgeFact, supersedeFact } from "./factstore";
 import { normalizeObjectText } from "./facts";
 import { closeFactEdges } from "./graph";
+import { json } from "./http";
+// Function-level cycle with proposals.ts (proposals imports applyProposal —
+// runs post-load only; see the note in proposals.ts).
+import { createProposal, ProposalError } from "./proposals";
 import { consumeConfirmToken, PurgeError, purgeEventCore } from "./purge";
 
 /** The Phase-3 truth engine: reviewing a proposal applies it for real.
@@ -346,4 +350,107 @@ export async function undoProposal(
     before: { kind: row.kind },
     after: { undone: true },
   });
+}
+
+/** ProposalError → HTTP, shared by the fact-review handlers. */
+function proposalErrorResponse(err: ProposalError): Response {
+  return json({ error: err.code, message: err.message }, err.code === "over_limit" ? 429 : 503);
+}
+
+/** POST /v1/facts/:id/{correct|dispute|purge} (admin) — each verb lands a
+ *  proposal; the tier rules may have already applied it. */
+export async function handleFactReview(
+  request: Request,
+  env: Env,
+  scope: Scope,
+  factId: string,
+  verb: string,
+): Promise<Response> {
+  const fact = await env.BRAIN_DB.prepare(`SELECT sensitivity FROM facts WHERE id = ?1`)
+    .bind(factId)
+    .first<{ sensitivity: string }>();
+  if (!fact) return json({ error: "not_found", message: "fact not found" }, 404);
+
+  const body = (await request.json().catch(() => null)) as
+    | { correction?: unknown; evidence_event_id?: unknown; reason?: unknown }
+    | null;
+  const reason = typeof body?.reason === "string" ? body.reason : undefined;
+  const evidence = typeof body?.evidence_event_id === "string" ? body.evidence_event_id : undefined;
+
+  try {
+    let res;
+    if (verb === "correct") {
+      if (typeof body?.correction !== "string" || body.correction.trim() === "") {
+        return json({ error: "bad_request", message: "correction required" }, 400);
+      }
+      res = await createProposal(env, scope, {
+        kind: "correction",
+        payload: { fact_id: factId, correction: body.correction, ...(reason ? { reason } : {}) },
+        target_type: "fact",
+        target_id: factId,
+        evidence_event_id: evidence,
+        sensitivity: fact.sensitivity,
+      });
+    } else if (verb === "dispute") {
+      res = await createProposal(env, scope, {
+        kind: "dispute",
+        payload: { ...(reason ? { reason } : {}) },
+        target_type: "fact",
+        target_id: factId,
+        sensitivity: fact.sensitivity,
+      });
+    } else if (verb === "purge") {
+      res = await createProposal(env, scope, {
+        kind: "forget",
+        payload: { target_type: "fact", target_id: factId, ...(reason ? { reason } : {}) },
+        target_type: "fact",
+        target_id: factId,
+        sensitivity: fact.sensitivity,
+      });
+    } else {
+      return json({ error: "not_found", message: `unknown fact verb: ${verb}` }, 404);
+    }
+    return json(
+      { proposal_id: res.id, review_mode: res.review_mode, applied: res.applied, ...(res.error ? { error: res.error } : {}) },
+      201,
+    );
+  } catch (err) {
+    if (err instanceof ProposalError) return proposalErrorResponse(err);
+    throw err;
+  }
+}
+
+/** POST /v1/proposals/:id/{apply|discard|undo} (admin). Forget applies need a
+ *  confirm token minted for `fact:{id}` / `event:{id}`; purges are irreversible. */
+export async function handleProposalReview(
+  request: Request,
+  env: Env,
+  _scope: Scope,
+  proposalId: string,
+  verb: string,
+): Promise<Response> {
+  const body = (await request.json().catch(() => null)) as { confirm_token?: unknown; reason?: unknown } | null;
+  const reason = typeof body?.reason === "string" ? body.reason : undefined;
+  const confirmToken = typeof body?.confirm_token === "string" ? body.confirm_token : undefined;
+  try {
+    if (verb === "apply") {
+      return json(await applyProposal(env, proposalId, { actor: "user", confirmToken, reason }));
+    }
+    if (verb === "discard") {
+      await discardProposal(env, proposalId, { actor: "user", reason });
+      return json({ discarded: true });
+    }
+    if (verb === "undo") {
+      await undoProposal(env, proposalId, { actor: "user" });
+      return json({ undone: true });
+    }
+    return json({ error: "not_found", message: `unknown proposal verb: ${verb}` }, 404);
+  } catch (err) {
+    if (err instanceof ReviewError) {
+      const status =
+        err.code === "not_found" ? 404 : err.code === "irreversible" ? 409 : err.code === "unsupported" ? 501 : 400;
+      return json({ error: err.code, message: err.message }, status);
+    }
+    throw err;
+  }
 }
