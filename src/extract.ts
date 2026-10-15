@@ -3,6 +3,7 @@ import { writeAudit } from "./audit";
 import { embedPendingFacts } from "./embed";
 import { resolveSubject } from "./entities";
 import { newFactId, normalizeCandidates, type SourceActor, type SourceContext } from "./facts";
+import { json } from "./http";
 import { EXTRACTION_MODEL, geminiJson, LlmError } from "./llm";
 import { FACT_EXTRACTION_PROMPT } from "./prompts";
 
@@ -227,4 +228,22 @@ export async function processExtractions(
   run.embedFailed = embs.failed;
 
   return run;
+}
+
+/** Admin manual kick (POST /v1/extract): the same pipeline as the sweep,
+ *  clamped to the manual caps. Body: { max_events?, max_calls? } (optional). */
+export async function handleExtract(request: Request, env: Env): Promise<Response> {
+  let body: { max_events?: number; max_calls?: number } = {};
+  try {
+    body = (await request.json()) as { max_events?: number; max_calls?: number };
+  } catch {
+    body = {}; // empty or invalid body: manual defaults
+  }
+  const clamp = (v: number | undefined, cap: number) =>
+    Number.isFinite(v) ? Math.max(1, Math.min(cap, Math.trunc(v as number))) : cap;
+  const run = await processExtractions(env, {
+    maxEvents: clamp(body.max_events, EXTRACTION_CAPS.manual.maxEvents),
+    maxCalls: clamp(body.max_calls, EXTRACTION_CAPS.manual.maxCalls),
+  });
+  return json(run);
 }

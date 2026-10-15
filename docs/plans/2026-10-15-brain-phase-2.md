@@ -443,19 +443,19 @@ export async function expireProposals(env: Env, now?: number): Promise<number>
 
 **Files:** `src/sweep.ts`, `src/health.ts`, `src/index.ts`, `test/sweep.test.ts`
 
-- [ ] `runSweep`: keep token pruning; then `expireProposals` + `try { await
+- [x] `runSweep`: keep token pruning; then `expireProposals` + `try { await
       processExtractions(env, EXTRACTION_CAPS.sweep) } catch (e) { console.log(...) }`;
       result adds `expired_proposals` and `extracted: ExtractionRun`; keep
       `pruned_tokens`, `warn`, `breaker`.
-- [ ] `healthReport` adds `extractions: { pending, running, failed, done }`
+- [x] `healthReport` adds `extractions: { pending, running, failed, done }`
       (single grouped count query), additive — existing keys unchanged.
-- [ ] `POST /v1/extract` (admin): body `{ max_events?, max_calls? }` clamped to
+- [x] `POST /v1/extract` (admin): body `{ max_events?, max_calls? }` clamped to
       `EXTRACTION_CAPS.manual` → `json(await processExtractions(env, …))`.
-- [ ] Tests: sweep expires proposals exactly at the boundary; sweep performs
+- [x] Tests: sweep expires proposals exactly at the boundary; sweep performs
       extraction via MSW handlers (facts created, `extracted.facts` reported);
       health counts reflect seeded statuses; `/v1/extract` admin-only (403 read,
       403 propose, 200 admin) and clamps (`max_events: 1000` → 100).
-- [ ] Gate; commit `feat(phase2): sweep extraction + proposal expiry + manual kick`.
+- [x] Gate; commit `feat(phase2): sweep extraction + proposal expiry + manual kick`.
 
 ## Task 9 — Semantic eval + live script + docs
 

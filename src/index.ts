@@ -3,6 +3,7 @@ import { resolveScope, requireScope } from "./auth";
 import { json } from "./http";
 import { healthReport } from "./health";
 import { handleEvents } from "./ingest";
+import { handleExtract } from "./extract";
 import { handleGetFact } from "./facts";
 import { handleMintToken, handlePurge } from "./purge";
 import { handleSearch } from "./search";
@@ -67,6 +68,12 @@ const ROUTES: Array<{ method: string; re: RegExp; need: Need; handler: Handler }
     re: /^\/v1\/proposals$/,
     need: "read",
     handler: (request, env) => handleListProposals(request, env),
+  },
+  {
+    method: "POST",
+    re: /^\/v1\/extract$/,
+    need: "admin",
+    handler: (request, env) => handleExtract(request, env),
   },
   {
     method: "GET",
