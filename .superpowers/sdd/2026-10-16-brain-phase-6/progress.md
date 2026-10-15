@@ -27,3 +27,9 @@ plan edits. No new model calls, secrets, or migrations this phase.
   read-side only).
 - Inspector: GET /inspector, unauthenticated shell with zero data, token in
   sessionStorage, live sections over read routes.
+
+Task 1: Ruling: connector events are actor=external (trust 0.4) — GitHub is a third-party surface; even the owner's own commit text must not cross the user_stated boundary (deterministic, no per-repo trust special-casing). kind stays "note" (no new event kinds); session_id `gh:{repo}` gives the dedupe pair (session_id, content_hmac) a second net behind the deterministic id.
+Task 1: Ruling: sync is ADMIN-triggered via POST body (repos list per call) instead of env config: no new vars/secrets, explicit operator intent, free-tier API budget. Optional GITHUB_TOKEN secret (env type optional, NOT in wrangler secrets.required) upgrades rate limits only.
+Task 1: gotcha: event ids must match /^[A-Za-z0-9_-]{1,64}$/ — repo slugs with dots/slashes get sanitized (`gh-{slug}-c-{sha12}`); sha truncated to 12.
+Task 1: per-repo errors never fail the batch; a fully failed sync returns 502 so the operator sees it, partial success 200 with per-repo error entries.
+Task 1: complete (commits ac84e30..700809a, tests: npx vitest run →    Duration  29.18s (transform 3.08s, setup 37.10s, import 5.55s, tests 20.29s, environment 5ms))
