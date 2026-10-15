@@ -308,7 +308,7 @@ export async function processExtractions(
 ): Promise<ExtractionRun>
 ```
 
-- [ ] `processExtractions`: (1) **seed** — `INSERT OR IGNORE INTO extractions
+- [x] `processExtractions`: (1) **seed** — `INSERT OR IGNORE INTO extractions
       (event_id, status, created_at, updated_at) SELECT e.id,'pending',?1,?1 FROM
       events e LEFT JOIN extractions x ON x.event_id = e.id WHERE x.event_id IS
       NULL AND e.privacy != 'restricted' AND e.redacted = 0 ORDER BY e.ts ASC
@@ -326,10 +326,10 @@ export async function processExtractions(
       events → `injection_suspected=1`, `facts_created=0`. On `LlmError`:
       `attempts < 3` → status back to `pending` else `failed` (+ truncated
       `error`); continue with next chunk if `calls` remain.
-- [ ] Facts insert uses `INSERT` (ids via the existing ulid helper in
+- [x] Facts insert uses `INSERT` (ids via the existing ulid helper in
       `src/crypto.ts` — reuse `newEventId`? No: keep a local `newFactId()` in
       `src/facts.ts` using the same generator exported from `crypto.ts`).
-- [ ] Tests (MSW handlers + real D1; canned model responses):
+- [x] Tests (MSW handlers + real D1; canned model responses):
       happy path → 2 facts, entity `user`=`Person` created, `facts_fts` row
       present, `fact_sources` row present, audit row, extraction row `done`;
       dedupe → second run with the same fact bumps `last_confirmed_at` (1 row,
@@ -337,7 +337,7 @@ export async function processExtractions(
       gets no `extractions` row; failure → `pending` after run 1 & 2, `failed`
       after run 3; caps → 50 seeded, sweep caps → `processed ≤ 40`, `calls ≤ 4`,
       remainder still `pending`; token counts recorded.
-- [ ] Gate; commit `feat(phase2): extraction pipeline (facts, entities, retries)`.
+- [x] Gate; commit `feat(phase2): extraction pipeline (facts, entities, retries)`.
 
 ## Task 5 — `src/embed.ts` + Vectorize upsert
 

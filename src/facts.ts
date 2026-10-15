@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { newEventId } from "./crypto";
 
 export const factCandidateSchema = z.array(
   z
@@ -77,6 +78,11 @@ export function normalizePredicate(s: string): string {
 /** Text embedded for vector search (T5): subject + de-underscored predicate + object. */
 export function buildEmbedText(f: { subjectName: string; predicate: string; objectText: string }): string {
   return `${f.subjectName} ${f.predicate.replace(/_/g, " ")} ${f.objectText}`;
+}
+
+/** Fact rows reuse the event ULID generator (time-sortable ids). */
+export function newFactId(): string {
+  return newEventId();
 }
 
 /** Turn raw extractor output into normalized facts, enforcing the kind/confidence
