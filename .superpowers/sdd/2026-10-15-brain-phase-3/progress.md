@@ -39,3 +39,9 @@ Task 4: handleFactReview looks up the fact first (404 unknown) and derives propo
 Task 4: mcp.ts proposalReply return widened to {created, id, review_mode, applied, error?}; auto-tier applies happen inside createProposal so MCP and REST share one path (audit actor=system, undoable).
 Task 4: test note: proposals.test.ts's status=applied listing assertion relaxed from exact-equality to all-applied + membership — the shared test DB now legitimately holds auto-applied rows created by the new tests.
 Task 4: complete (commits 566663e..40cf4ad, tests: npx vitest run →    Duration  24.15s (transform 2.89s, setup 29.94s, import 3.56s, tests 17.79s, environment 6ms))
+
+Task 5: Ruling: `current` flags the version in effect (status='active'), not the requested fact — why(old) and why(new) return identical flags ("shows both versions"); a chain ending in disputed/deleted has no current flag — cost if wrong: UI relies on status instead.
+Task 5: Ruling: versions sorted by learned_at ASC, tiebreak id (ULIDs are time-sortable); backward walk takes the latest superseding row per level — chains are linear in practice.
+Task 5: versions carry an extra `deleted` flag (status='deleted' ⇔ object:null) beyond the brief's field list; sources rows keep the brief's shape exactly, `restricted:true` only when masked.
+Task 5: tsc quirk: annotated loop vars as `VersionRow | null` — TS7022 fired on the cursor↔row inference cycle (`bind(cursor)` feeds the query whose result feeds cursor).
+Task 5: complete (commits 3959118..42fc751, tests: npx vitest run →    Duration  25.45s (transform 3.08s, setup 31.54s, import 4.14s, tests 17.84s, environment 5ms))
