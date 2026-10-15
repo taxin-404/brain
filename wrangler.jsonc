@@ -3,9 +3,7 @@
   "name": "brain-api",
   "main": "src/index.ts",
   "compatibility_date": "2026-10-01",
-  // database_id placeholder validates as a UUID; replaced with the real id from
-  // `npx wrangler d1 create brain-db` in Task 3.
-  "d1_databases": [{ "binding": "BRAIN_DB", "database_name": "brain-db", "database_id": "00000000-0000-0000-0000-000000000000" }],
+  "d1_databases": [{ "binding": "BRAIN_DB", "database_name": "brain-db", "database_id": "4d7130e8-65aa-4558-985e-96d38db38b30" }],
   "r2_buckets": [{ "binding": "BRAIN_RAW", "bucket_name": "brain-raw" }],
   "observability": { "enabled": true },
   "env": {
