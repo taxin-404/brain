@@ -47,3 +47,4 @@ Task 4: eval file implements the full done-when sentence end to end: MCP propose
 Task 4: complete (commits c62f826..96bcdc6, tests: npx vitest run →    Duration  28.57s (transform 3.07s, setup 36.04s, import 5.19s, tests 20.32s, environment 5ms))
 
 Task 5: Close-out. Full gate green: 35 files / 212 tests, tsc clean. README gains the Phase 5 section (flow, trust on origin, versioning, routes, eval), map + layout + progress rows updated. Hub mirror refreshed. Merge + acceptance boxes stay unticked until the post-merge single-shot acceptance pass. Deferred with reasons: procedure embeddings/search (Vectorize spec line covers durable corpora, but done-when doesn't require retrieval; parity with reflections), deprecation flow, execution tracking (`last_success_at` stays reserved).
+Task 5: complete (commits 1b75670..e8e9b0f, tests: npx vitest run →    Duration  28.51s (transform 3.07s, setup 35.94s, import 5.26s, tests 20.29s, environment 3ms))
