@@ -7,6 +7,7 @@ import { handleMintToken, handlePurge } from "./purge";
 import { handleSearch } from "./search";
 import { handleGetBlocks, handlePutBlock } from "./blocks";
 import { handleMcp } from "./mcp";
+import { runSweep } from "./sweep";
 
 export type Handler = (
   request: Request,
@@ -93,5 +94,9 @@ export default {
       return route.handler(request, env, scope, ctx, match);
     }
     return new Response("not found", { status: 404 });
+  },
+
+  async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    ctx.waitUntil(runSweep(env));
   },
 } satisfies ExportedHandler<Env>;
