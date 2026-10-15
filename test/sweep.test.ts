@@ -112,7 +112,7 @@ describe("sweep", () => {
         const lines = JSON.parse(body.contents[0].parts[0].text) as Array<{ event_id: string; excerpt: string }>;
         const out = lines.map((l) => ({
           subject: "sweep subject",
-          predicate: "noted",
+          predicate: "uses",
           object: `extracted ${l.excerpt}`,
           fact_kind: "user_stated",
           confidence: 0.9,

@@ -349,14 +349,14 @@ you can also push") before execution; the ledger records it.
 - `ExtractionRun` gains `superseded: number` and `disputed: number`
   (additive; `EMPTY_RUN`, `handleExtract` response, and health untouched).
 
-- [ ] **Step 1: Tests** — user-stated new supersedes inferred old (and both
+- [x] **Step 1: Tests** — user-stated new supersedes inferred old (and both
   user-stated: newest wins, old keeps text for `why`); non-user new vs
   user-stated old → inserted `disputed`, old untouched; non-user vs non-user
   on an exclusive predicate → `disputed`; multivalued predicate → no conflict;
   unknown predicate, both non-user → both active; counters reflect each case.
-- [ ] **Step 2: Run and watch fail.**
-- [ ] **Step 3: Implement** lists + conflict block + counters.
-- [ ] **Step 4: Gate + commit** —
+- [x] **Step 2: Run and watch fail.**
+- [x] **Step 3: Implement** lists + conflict block + counters.
+- [x] **Step 4: Gate + commit** —
   `feat(extract): deterministic contradiction handling (supersede/dispute)`.
 
 ### Task 7 — ForgetEval + docs + close-out

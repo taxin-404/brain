@@ -51,6 +51,32 @@ export interface NormalizedFact {
 const FACT_KINDS: ReadonlySet<string> = new Set(["user_stated", "observed", "inferred", "guess", "temporary"]);
 const SENSITIVITIES: ReadonlySet<string> = new Set(["normal", "sensitive", "restricted"]);
 
+/** Contradiction rule table (design §6 — deterministic, no LLM). Multivalued
+ *  predicates legitimately hold many objects at once; exclusive predicates hold
+ *  exactly one. Predicates in neither list are unknown: conflicting facts just
+ *  coexist (no guessing), unless a user-stated claim arrived to supersede. */
+export const MULTIVALUED_PREDICATES: ReadonlySet<string> = new Set([
+  "uses",
+  "depends_on",
+  "has_commit",
+  "has_endpoint",
+  "defines_table",
+  "supports_tools",
+  "uses_code_path",
+  "uses_database",
+  "has_vulnerability",
+  "contains",
+]);
+export const EXCLUSIVE_PREDICATES: ReadonlySet<string> = new Set([
+  "name",
+  "is_called",
+  "lives_in",
+  "works_at",
+  "is_based_in",
+  "has_status",
+  "decided",
+]);
+
 const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
 
 /** Entity-normalization for subjects: lowercase, punctuation → space, collapse. */

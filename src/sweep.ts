@@ -19,6 +19,8 @@ const EMPTY_RUN: ExtractionRun = {
   injection: 0,
   embedded: 0,
   embedFailed: 0,
+  superseded: 0,
+  disputed: 0,
 };
 
 /** Runs on the 30-minute cron: prune expired confirm tokens, retire lapsed

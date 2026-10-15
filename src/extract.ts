@@ -1,8 +1,14 @@
 import type { Env } from "./env";
 import { embedPendingFacts } from "./embed";
 import { resolveSubject } from "./entities";
-import { confirmFact, createFact } from "./factstore";
-import { normalizeCandidates, type SourceActor, type SourceContext } from "./facts";
+import { confirmFact, createFact, supersedeFact } from "./factstore";
+import {
+  EXCLUSIVE_PREDICATES,
+  MULTIVALUED_PREDICATES,
+  normalizeCandidates,
+  type SourceActor,
+  type SourceContext,
+} from "./facts";
 import { json } from "./http";
 import { EXTRACTION_MODEL, geminiJson, LlmError } from "./llm";
 import { FACT_EXTRACTION_PROMPT } from "./prompts";
@@ -17,6 +23,10 @@ export interface ExtractionRun {
   embedded: number;
   /** embedding passes that failed (retried on a later sweep) */
   embedFailed: number;
+  /** active facts superseded by the run's contradiction handling */
+  superseded: number;
+  /** facts inserted with status='disputed' by the run's contradiction handling */
+  disputed: number;
 }
 
 export const EXTRACTION_CAPS = {
@@ -62,7 +72,17 @@ export async function processExtractions(
   const maxEvents = opts.maxEvents ?? EXTRACTION_CAPS.sweep.maxEvents;
   const maxCalls = opts.maxCalls ?? EXTRACTION_CAPS.sweep.maxCalls;
   const db = env.BRAIN_DB;
-  const run: ExtractionRun = { processed: 0, facts: 0, failed: 0, calls: 0, injection: 0, embedded: 0, embedFailed: 0 };
+  const run: ExtractionRun = {
+    processed: 0,
+    facts: 0,
+    failed: 0,
+    calls: 0,
+    injection: 0,
+    embedded: 0,
+    embedFailed: 0,
+    superseded: 0,
+    disputed: 0,
+  };
 
   // 1. queue extractable events that have no row yet (restricted and purged
   //    events never queue; tombstones are system bookkeeping, not content)
@@ -129,19 +149,53 @@ export async function processExtractions(
         if (existing) {
           await confirmFact(env, existing.id, fact.eventId, now);
         } else {
-          await createFact(env, {
+          // Contradiction handling (design §6 — deterministic rule table): only
+          // when another ACTIVE fact shares (subject, predicate) with a
+          // different object. Exact-object duplicates took the confirm path.
+          const { results: conflicts } = await db
+            .prepare(
+              `SELECT id, fact_kind FROM facts
+               WHERE subject_id = ?1 AND predicate = ?2 AND object_text IS NOT NULL AND object_text != ?3
+                 AND status = 'active'`,
+            )
+            .bind(subject.id, fact.predicate, fact.objectText)
+            .all<{ id: string; fact_kind: string }>();
+
+          let insertStatus: "active" | "disputed" = "active";
+          let supersedeOlds: string[] = [];
+          if (conflicts.length > 0 && !MULTIVALUED_PREDICATES.has(fact.predicate)) {
+            if (fact.factKind === "user_stated") {
+              supersedeOlds = conflicts.map((c) => c.id);
+            } else if (conflicts.some((c) => c.fact_kind === "user_stated") || EXCLUSIVE_PREDICATES.has(fact.predicate)) {
+              insertStatus = "disputed";
+            }
+            // else: unknown predicate with non-user facts on both sides — coexist
+          }
+
+          const newId = await createFact(env, {
             subjectId: subject.id,
             subjectName: subject.name,
             predicate: fact.predicate,
             objectText: fact.objectText,
             factKind: fact.factKind,
             confidence: fact.confidence,
+            status: insertStatus,
             validAt: fact.validAt,
             expiresAt: fact.expiresAt,
             sensitivity: fact.sensitivity,
             sourceEventId: fact.eventId,
             now,
           });
+          for (const oldId of supersedeOlds) {
+            try {
+              await supersedeFact(env, oldId, newId, now);
+              run.superseded += 1;
+            } catch (err) {
+              // lost a race with another writer; the old fact is already gone
+              console.log(`[extract] supersede skipped for ${oldId}: ${String(err)}`);
+            }
+          }
+          if (insertStatus === "disputed") run.disputed += 1;
           run.facts += 1;
           perEvent.set(fact.eventId, (perEvent.get(fact.eventId) ?? 0) + 1);
         }
