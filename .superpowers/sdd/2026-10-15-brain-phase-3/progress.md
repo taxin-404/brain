@@ -52,3 +52,12 @@ Task 6: Ruling: a supersedeFact failure during extraction (lost race: old no lon
 Task 6: Rule query only considers old facts with status='active' AND object_text IS NOT NULL AND object_text != new object (exact duplicates took the confirm path; purged rows are status='deleted' anyway).
 Task 6: test change: sweep.test.ts's extraction test seeded two conflicting user_stated facts (same subject/predicate "noted", different objects) which now supersede → switched its predicate to multivalued "uses" so the sweep-wiring test stays focused (2 facts, 2 embedded).
 Task 6: complete (commits 4a5f9ad..0745553, tests: npx vitest run →    Duration  21.60s (transform 2.84s, setup 25.62s, import 3.52s, tests 17.22s, environment 1ms))
+
+Task 7: Close-out decisions (consolidated):
+- Tier ruling: sensitive/restricted disputes stay manual (safety carve-out, see T4); auto-tier rows apply at creation as actor=system and stay undoable.
+- Supersession vector lifecycle: superseded/purged facts lose their vector (deleteByIds) and vec_id goes NULL; undo of a correction re-embeds through the ordinary embedPendingFacts sweep — no bespoke re-embed path.
+- Deterministic contradictions chosen over an LLM contradiction prompt for Phase 3 (rule table in code, zero extra LLM calls); an LLM contradiction prompt is deferred beyond phase 3 — cost if wrong: nuanced contradictions are missed until a later phase (visible via review/why, not lost).
+- Entity merge deferred: Phase 3 learns aliases passively only; there is no merge/absorb flow (procedure proposals stay parked for Phase 5) — cost if wrong: duplicate entities persist until a merge flow exists.
+- ForgetEval scope: the eval exercises stored-vector staleness (metadata claims active/normal; only the D1 re-check can hide forgotten facts) — that is the "cannot resurrect" guarantee.
+- test/eval-forget.test.ts additionally pinned that admin search omits restricted facts unless `include_restricted=true` is passed (existing route contract), alongside the READ scope 404s.
+Task 7: complete (commits 4c29bc3..3589295, tests: npx vitest run →    Duration  22.45s (transform 2.89s, setup 27.04s, import 3.85s, tests 17.52s, environment 4ms))
