@@ -3,8 +3,8 @@
 Personal neural memory for OpenCode sessions — capture, redact, encrypt at rest,
 search, and recall into future sessions. Runs on Cloudflare Workers (D1 + R2).
 
-**Status: Phase 0 delivered & live · Phase 1 in progress** — Tasks 1–13 of 15
-complete (47 Worker + 3 plugin tests green, deployed), Task 14 (Phase 1 acceptance) next.
+**Status: Phase 0 delivered & live · Phase 1 in progress** — Tasks 1–14 of 15
+complete (48 Worker + 3 plugin tests green, deployed live, acceptance passed), Task 15 (keyword eval harness) next.
 
 ## Read-first map
 
@@ -23,7 +23,7 @@ src/            Worker source — routes, auth, crypto, redact, budget, ingest,
                 purge, audit, rebuild (FTS5), search, blocks, mcp, sweep, health
 migrations/     D1 schema 0001–0005 (wrangler d1 migrations apply)
 test/           vitest suite (@cloudflare/vitest-plugin, D1 via miniflare)
-plugin/         OpenCode capture plugin — standalone npm package (Task 13)
+plugin/         OpenCode capture plugin — event-sourced capture + diagnostics (Tasks 13–14)
 docs/           spec + plan + key rotation
 wrangler.jsonc  Worker config: D1 brain-db, R2 brain-raw, cron "*/30 * * * *"
 ```
@@ -66,7 +66,7 @@ live in `vitest.config.ts` miniflare bindings — the suite runs from a fresh cl
 | 11 | MCP server: recall, get_blocks, health_report, remember | ✅ |
 | 12 | `*/30` sweep cron | ✅ |
 | 13 | OpenCode capture plugin (`plugin/`) | ✅ |
-| 14 | Phase 1 acceptance | ⏳ |
+| 14 | Phase 1 acceptance — live capture + MCP recall proven, race fix | ✅ |
 | 15 | eval harness | ⏳ |
 
 ## For AI agents
@@ -82,3 +82,8 @@ live in `vitest.config.ts` miniflare bindings — the suite runs from a fresh cl
   budget assertions as deltas.
 - Secrets policy: `.secrets/` and `.dev.vars` are gitignored; the `dev-*` tokens
   in `vitest.config.ts` are intentionally public and local-only.
+- Capture plugin: sessions are discovered from the global event stream
+  (`ctx.session` has no `list` at runtime); diagnostics land in
+  `/tmp/opencode/brain-capture-diag.log` — plugin console output is invisible in
+  server logs. Live E2E without touching global config: a project-local
+  `opencode.json` with the plugin entry in a scratch dir (see `task-14-log.md`).
