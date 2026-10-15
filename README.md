@@ -186,6 +186,41 @@ versioned procedure — and only a human can flip the approval switch.
   `approved`. Full evidence in the
   [Phase 5 plan](docs/plans/2026-10-16-brain-phase-5.md) closing section.
 
+## Phase 6 (reach)
+
+The brain syncs from GitHub, backs itself up in two profiles, restores onto a
+clean account with nothing but the escrowed KEK — and ships a small read-only
+inspector.
+
+- **GitHub connector:** `POST /v1/connectors/github/sync` (ADMIN) pulls recent
+  commits for up to 10 `owner/name` repos (lookback ≤ 720 h) and lands them
+  through the normal ingest path. Events are `source: github`, **`actor:
+  external` (trust 0.4)** — a third-party surface, so connector text can never
+  become `user_stated` material. Deterministic ids (`gh-{repo}-c-{sha12}`)
+  make re-syncs idempotent. Optional `GITHUB_TOKEN` secret raises rate limits;
+  public-repo sync works unauthenticated without it.
+- **Export profiles:** `GET /v1/export?profile=backup|portable` (ADMIN) walks
+  the content tables (FTS is re-derived, not copied) into chunked NDJSON parts
+  under `exports/{job}/` in R2 with a `meta.json` sidecar. `backup` (default)
+  ships ciphertext + wrapped keys — a leaked link exposes nothing without the
+  KEK. `portable` additionally requires a single-use confirm token
+  (`POST /v1/confirm/token`, target `export:portable`), decrypts payloads on
+  the walk, and omits wrapped keys.
+- **Links + retention:** downloads ride an HMAC-signed URL (`?exp&token`,
+  15-minute TTL, constant-time compare) requiring **no bearer** token.
+  Portable jobs delete themselves from R2 right after the first download;
+  every other job is pruned by the sweep once expired (+5 min grace, ≤100
+  objects per run).
+- **Restore:** `POST /v1/restore {job}` (ADMIN) reads a backup export back
+  into a fresh account — schema from migrations, zero rows — and rebuilds
+  both FTS indexes. Payloads stay encrypted at rest; the wrapped keys unwrap
+  with `PAYLOAD_KEK` alone. The clean-account proof is
+  `test/eval-restore.test.ts`: the §8 done-when sentence (export → wipe →
+  restore → verified through the read routes, payload decrypted with the KEK).
+- **Inspector:** `GET /inspector` serves a single self-contained page (zero
+  data, no build step); paste a read token and it shows health, search,
+  procedures, and the latest reflection.
+
 ## Read-first map
 
 | Doc | What it is |
@@ -196,11 +231,13 @@ versioned procedure — and only a human can flip the approval switch.
 | [`docs/plans/2026-10-15-brain-phase-3.md`](docs/plans/2026-10-15-brain-phase-3.md) | Phase 3 plan — review engine, why/entity views, contradictions |
 | [`docs/plans/2026-10-15-brain-phase-4.md`](docs/plans/2026-10-15-brain-phase-4.md) | Phase 4 plan — crons, consolidation, reflections, health |
 | [`docs/plans/2026-10-16-brain-phase-5.md`](docs/plans/2026-10-16-brain-phase-5.md) | Phase 5 plan — procedures, versioning, approval gate |
+| [`docs/plans/2026-10-16-brain-phase-6.md`](docs/plans/2026-10-16-brain-phase-6.md) | Phase 6 plan — connector, export profiles, restore, inspector |
 | [`.superpowers/sdd/2026-10-15-brain-phase-0-1/progress.md`](.superpowers/sdd/2026-10-15-brain-phase-0-1/progress.md) | Running ledger — rulings, gotchas, environment facts. **Read before changing anything.** |
 | [`.superpowers/sdd/2026-10-15-brain-phase-2/progress.md`](.superpowers/sdd/2026-10-15-brain-phase-2/progress.md) | Phase 2 ledger — rulings + gotchas |
 | [`.superpowers/sdd/2026-10-15-brain-phase-3/progress.md`](.superpowers/sdd/2026-10-15-brain-phase-3/progress.md) | Phase 3 ledger — rulings + gotchas |
 | [`.superpowers/sdd/2026-10-15-brain-phase-4/progress.md`](.superpowers/sdd/2026-10-15-brain-phase-4/progress.md) | Phase 4 ledger — rulings + gotchas |
 | [`.superpowers/sdd/2026-10-16-brain-phase-5/progress.md`](.superpowers/sdd/2026-10-16-brain-phase-5/progress.md) | Phase 5 ledger — rulings + gotchas |
+| [`.superpowers/sdd/2026-10-16-brain-phase-6/progress.md`](.superpowers/sdd/2026-10-16-brain-phase-6/progress.md) | Phase 6 ledger — rulings + gotchas |
 | `.superpowers/sdd/2026-10-15-brain-phase-0-1/task-N-brief.md` | Per-task briefs (interfaces, verbatim tests) |
 | [`docs/key-rotation.md`](docs/key-rotation.md) | PAYLOAD_KEK rotation procedure |
 
@@ -210,7 +247,7 @@ versioned procedure — and only a human can flip the approval switch.
 src/            Worker source — routes, auth, crypto, redact, budget, ingest,
                 purge, audit, rebuild (FTS5), search, blocks, mcp, sweep,
                 extract, factstore, graph, review, consolidate, reflect,
-                procedures, health
+                procedures, health, connector-github, exporter, inspector
 migrations/     D1 schema 0001–0005 (wrangler d1 migrations apply)
 test/           vitest suite (@cloudflare/vitest-plugin, D1 via miniflare)
 plugin/         OpenCode capture plugin — event-sourced capture + diagnostics (Tasks 13–14)
@@ -307,6 +344,7 @@ builds.
 | — | Phase 3: review engine, why/entity views, deterministic contradictions | ✅ |
 | — | Phase 4: crons, consolidation, reflections, health | ✅ |
 | — | Phase 5: procedures — versioning + human approval gate | ✅ |
+| — | Phase 6: reach — GitHub connector, exports + clean-account restore, inspector | ✅ |
 
 ## For AI agents
 

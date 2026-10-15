@@ -168,11 +168,11 @@ Spec anchors that pin the behavior:
 
 **Files:** Modify `README.md`; ledger close-out; mirror plan.
 
-- [ ] **Step 1: Full gate** — `npx vitest run` + `npx tsc --noEmit`.
-- [ ] **Step 2: README** Phase 6 section (connector, export profiles, links +
+- [x] **Step 1: Full gate** — `npx vitest run` + `npx tsc --noEmit`.
+- [x] **Step 2: README** Phase 6 section (connector, export profiles, links +
   retention, restore + clean-account proof, inspector) + status line.
-- [ ] **Step 3: Tick every box; ledger close-out; mirror.**
-- [ ] **Step 4: Commit** — `docs: close phase 6 (reach + restore)`.
+- [x] **Step 3: Tick every box; ledger close-out; mirror.**
+- [x] **Step 4: Commit** — `docs: close phase 6 (reach + restore)`.
 
 ## Merge + acceptance (closing — one push)
 
