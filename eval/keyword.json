@@ -1,0 +1,62 @@
+[
+  {
+    "q": "events flowing globally plugin instance",
+    "expect": "events ARE flowing",
+    "doc": "Breakthrough: events ARE flowing — globally (my session's events are visible to the brain-e2e plugin instance)."
+  },
+  {
+    "q": "ctx.session.list definitively missing",
+    "expect": "definitively missing",
+    "doc": "Diagnostics confirm: options delivered (including diag), subscription active, and ctx.session.list definitively missing."
+  },
+  {
+    "q": "EventDomain subscription-only service.json password",
+    "expect": "service.json holds a server password",
+    "doc": "`EventDomain` is subscription-only, and service.json holds a server password."
+  },
+  {
+    "q": "session.idle schema types/node installed",
+    "expect": "exist in the schema",
+    "doc": "`session.idle` and many session events exist in the schema, and @types/node is now installed (tsconfig lacks the `types` field — will verify with tsc)."
+  },
+  {
+    "q": "content_hmac non-unique primary key",
+    "expect": "events.id primary key",
+    "doc": "The (session_id, content_hmac) index is non-unique, so the throw came from the events.id primary key."
+  },
+  {
+    "q": "concurrent overlapping batches 1101 check-then-insert TOCTOU",
+    "expect": "check-then-insert TOCTOU",
+    "doc": "Confirmed with a clean repro: concurrent overlapping batches → one 201, one 500 / error code 1101 — a check-then-insert TOCTOU race in the Worker's ingest."
+  },
+  {
+    "q": "sequential duplicates handled perfectly",
+    "expect": "handled perfectly",
+    "doc": "Sequential duplicates are handled perfectly (201 + status \"duplicate\"). The 500 must be the concurrent race."
+  },
+  {
+    "q": "deploying fix re-running repro production",
+    "expect": "re-running the exact concurrent repro",
+    "doc": "47/47 green. Committing and deploying the fix, then re-running the exact concurrent repro against production:"
+  },
+  {
+    "q": "Pipeline ALIVE discovery ingest successful POST",
+    "expect": "first successful POST",
+    "doc": "Pipeline is ALIVE — discovery → ingest → first successful POST (22 events), but a concurrent overlapping batch got a 500 Worker exception."
+  },
+  {
+    "q": "pre-insert SELECT constraint violation",
+    "expect": "constraint violation",
+    "doc": "Confirmed and understood: the pre-insert `SELECT` check is a TOCTOU race — two overlapping batches both pass it, then the second `INSERT` hits a constraint violation and throws (1101)."
+  },
+  {
+    "q": "tsconfig node types checks",
+    "expect": "fixing the tsconfig",
+    "doc": "Now fixing the tsconfig for node types and running the checks."
+  },
+  {
+    "q": "brain-e2e-accept-9c1f",
+    "expect": "brain-e2e-accept-9c1f",
+    "doc": "Please reply with exactly: brain-e2e-accept-9c1f"
+  }
+]
