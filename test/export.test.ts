@@ -2,6 +2,7 @@ import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import { contentHmac, decryptPayload } from "../src/crypto";
 import { ingestEvents } from "../src/ingest";
+import { runSweep } from "../src/sweep";
 import { bearer, call } from "./helpers";
 
 const seedEvent = async (excerpt: string, payload: unknown): Promise<string> => {
@@ -102,5 +103,88 @@ describe("export — backup profile", () => {
       expect((await call("GET", "/v1/export?profile=backup", undefined, bearer(env, scope))).status).toBe(403);
     }
     expect((await call("GET", "/v1/export?profile=evil", undefined, bearer(env, "ADMIN"))).status).toBe(400);
+  });
+});
+
+const mintExportToken = async (): Promise<string> => {
+  const mint = await call("POST", "/v1/confirm/token", { target: "export:portable" }, bearer(env, "ADMIN"));
+  expect(mint.status).toBe(201);
+  return (await mint.json<{ token: string }>()).token;
+};
+
+describe("export — portable profile + retention", () => {
+  it("requires a single-use confirm token", async () => {
+    expect((await call("GET", "/v1/export?profile=portable", undefined, bearer(env, "ADMIN"))).status).toBe(403);
+    expect(
+      (await call("GET", "/v1/export?profile=portable&confirm_token=nope", undefined, bearer(env, "ADMIN"))).status,
+    ).toBe(403);
+
+    const token = await mintExportToken();
+    const res = await call(
+      "GET",
+      `/v1/export?profile=portable&confirm_token=${token}`,
+      undefined,
+      bearer(env, "ADMIN"),
+    );
+    expect(res.status).toBe(200);
+    expect((await res.json<{ profile: string }>()).profile).toBe("portable");
+
+    // Single-use: the same token can never mint a second portable export.
+    expect(
+      (await call("GET", `/v1/export?profile=portable&confirm_token=${token}`, undefined, bearer(env, "ADMIN"))).status,
+    ).toBe(403);
+  });
+
+  it("decrypts payloads, ships no wrapped keys, and deletes R2 after one download", async () => {
+    const eventId = await seedEvent("portable me", { portable: "portable-world" });
+    const token = await mintExportToken();
+    const res = await call(
+      "GET",
+      `/v1/export?profile=portable&confirm_token=${token}`,
+      undefined,
+      bearer(env, "ADMIN"),
+    );
+    const body = await res.json<{ job: string; url: string }>();
+
+    const meta = await (await env.BRAIN_RAW.get(`exports/${body.job}/meta.json`))!.json<{ profile: string }>();
+    expect(meta.profile).toBe("portable");
+
+    const partKeys = (await listParts(body.job)).objects
+      .filter((o) => o.key.endsWith(".ndjson"))
+      .map((o) => o.key)
+      .sort();
+    const lines: any[] = [];
+    for (const k of partKeys) {
+      const partText = await (await env.BRAIN_RAW.get(k))!.text();
+      lines.push(...partText.split("\n").filter(Boolean).map((l) => JSON.parse(l)));
+    }
+
+    // Decrypted plaintext, no wrapped keys anywhere in a portable artifact.
+    const payloadRows = lines.filter((l) => l.table === "r2_payloads").flatMap((l) => l.rows);
+    expect(payloadRows.find((r: { key: string }) => r.key === `payloads/${eventId}`)?.text).toContain(
+      "portable-world",
+    );
+    expect(lines.find((l) => l.table === "event_keys")).toBeUndefined();
+    expect(JSON.stringify(lines)).not.toContain("wrapped_key");
+
+    // Download once: bytes intact, then the whole job is gone from R2.
+    const dl = await call("GET", body.url);
+    expect(dl.status).toBe(200);
+    expect(await dl.text()).toContain("portable-world");
+    expect((await listParts(body.job)).objects.length).toBe(0);
+    expect((await call("GET", body.url)).status).toBe(404);
+  });
+
+  it("sweep prunes expired export objects and keeps fresh ones", async () => {
+    const now = Date.now();
+    await env.BRAIN_RAW.put("exports/oldjob000/000.ndjson", "x");
+    await env.BRAIN_RAW.put("exports/oldjob000/meta.json", JSON.stringify({ profile: "backup", exp: now - 10 * 60_000 }));
+    await env.BRAIN_RAW.put("exports/newjob000/000.ndjson", "y");
+    await env.BRAIN_RAW.put("exports/newjob000/meta.json", JSON.stringify({ profile: "backup", exp: now + 10 * 60_000 }));
+
+    await runSweep(env, now);
+
+    expect((await env.BRAIN_RAW.list({ prefix: "exports/oldjob000/" })).objects.length).toBe(0);
+    expect((await env.BRAIN_RAW.list({ prefix: "exports/newjob000/" })).objects.length).toBe(2);
   });
 });

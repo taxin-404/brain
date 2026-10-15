@@ -1,7 +1,8 @@
 import { writeAudit } from "./audit";
-import { contentHmac, newEventId } from "./crypto";
+import { contentHmac, decryptPayload, newEventId } from "./crypto";
 import type { Env } from "./env";
 import { json } from "./http";
+import { consumeConfirmToken, PurgeError } from "./purge";
 
 /** Export profiles (design §8 phase 6 + amendment 3): a chunked NDJSON job
  *  written to R2 and reachable only through a short-TTL HMAC-signed link.
@@ -58,6 +59,14 @@ const b64encode = (buf: ArrayBuffer): string => {
 export const exportLinkToken = (hmacKey: string, job: string, exp: number): Promise<string> =>
   contentHmac(hmacKey, `export:${job}:${exp}`);
 
+const loadWrappedKeys = async (env: Env): Promise<Map<string, string>> => {
+  const { results } = await env.BRAIN_DB.prepare(`SELECT event_id, wrapped_key FROM event_keys`).all<{
+    event_id: string;
+    wrapped_key: string;
+  }>();
+  return new Map(results.map((r) => [r.event_id, r.wrapped_key]));
+};
+
 const constantTimeEqual = (a: string, b: string): boolean => {
   if (a.length !== b.length) return false;
   let diff = 0;
@@ -73,6 +82,9 @@ export async function runExport(
   const job = newEventId();
   const exp = now + EXPORT_TTL_MS;
   const meta = { profile, exp: String(exp) };
+  // Portable artifacts are decrypted on the walk and ship no wrapped keys.
+  const tables = profile === "backup" ? EXPORT_TABLES : EXPORT_TABLES.filter((t) => t !== "event_keys");
+  const wrappedKeys = profile === "portable" ? await loadWrappedKeys(env) : null;
 
   let buf: string[] = [];
   let size = 0;
@@ -97,11 +109,11 @@ export async function runExport(
       version: 1,
       profile,
       exported_at: now,
-      tables: [...EXPORT_TABLES, "r2_payloads"],
+      tables: [...tables, "r2_payloads"],
     }),
   );
 
-  for (const table of EXPORT_TABLES) {
+  for (const table of tables) {
     const { results } = await env.BRAIN_DB.prepare(`SELECT * FROM ${table}`).all();
     for (let i = 0; i < results.length; i += CHUNK_ROWS) {
       await line(JSON.stringify({ table, rows: results.slice(i, i + CHUNK_ROWS) }));
@@ -119,7 +131,18 @@ export async function runExport(
       if (profile === "backup") {
         await line(JSON.stringify({ table: "r2_payloads", rows: [{ key: obj.key, b64: b64encode(blob) }] }));
       } else {
-        await line(JSON.stringify({ table: "r2_payloads", rows: [{ key: obj.key, text: null }] }));
+        // Decrypt with the KEK + this event's wrapped key; orphans stay null.
+        let text: string | null = null;
+        const eventId = obj.key.slice("payloads/".length);
+        const wrappedKey = wrappedKeys?.get(eventId);
+        if (wrappedKey) {
+          try {
+            text = await decryptPayload(env.PAYLOAD_KEK, wrappedKey, blob);
+          } catch {
+            text = null;
+          }
+        }
+        await line(JSON.stringify({ table: "r2_payloads", rows: [{ key: obj.key, text }] }));
       }
     }
     cursor = list.truncated ? list.cursor : undefined;
@@ -148,11 +171,23 @@ export async function runExport(
 }
 
 export async function handleExportRequest(request: Request, env: Env): Promise<Response> {
-  const profile = new URL(request.url).searchParams.get("profile") ?? "backup";
+  const url = new URL(request.url);
+  const profile = url.searchParams.get("profile") ?? "backup";
   if (profile !== "backup" && profile !== "portable") {
     return json({ error: "bad_request", message: "profile must be backup|portable" }, 400);
   }
-  if (profile === "portable") return json({ error: "unsupported", message: "portable arrives in T3" }, 501);
+  if (profile === "portable") {
+    // Load-bearing confirmation: decrypted data only ever leaves R2 when an
+    // admin minted (and we just consumed) a single-use token for this target.
+    const confirmToken = url.searchParams.get("confirm_token") ?? "";
+    if (!confirmToken) return json({ error: "confirm_required" }, 403);
+    try {
+      await consumeConfirmToken(env, "export:portable", confirmToken);
+    } catch (err) {
+      if (err instanceof PurgeError) return json({ error: "forbidden", message: err.message }, 403);
+      throw err;
+    }
+  }
   return json(await runExport(env, profile));
 }
 
@@ -189,8 +224,10 @@ export async function handleExportDownload(env: Env, job: string, url: URL): Pro
         }
       }
       if (profile === "portable") {
-        // "auto-delete from R2 after download" — the bytes are flushed first.
+        // "auto-delete from R2 after download" — deletes run before the writer
+        // closes, so by the time the client sees EOF the job is gone.
         for (const o of sorted) await env.BRAIN_RAW.delete(o.key);
+        await env.BRAIN_RAW.delete(metaKey(job));
       }
     } finally {
       await writer.close();

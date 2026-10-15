@@ -27,9 +27,43 @@ const EMPTY_RUN: ExtractionRun = {
  *  proposals, run the capped extraction pass (failures are logged, never fatal),
  *  then re-read the budget and log a `[sweep]` warning when the 70k warn line
  *  or 80k breaker is crossed. */
+/** Retention for export jobs: past `exp` (+5 min grace) the signed link is
+ *  dead by design, so the sweep reclaims the R2 objects. Portable jobs
+ *  normally self-delete on first download; this is the enforced TTL fallback
+ *  for never-downloaded ones, and the janitor for expired backups. Capped at
+ *  100 object deletes per run. A prefix without a meta.json (crash mid-job)
+ *  has no exp to trust and is skipped — it is unreachable without a link. */
+export async function pruneExportObjects(env: Env, now: number): Promise<number> {
+  const grace = 5 * 60_000;
+  let pruned = 0;
+  const jobs = await env.BRAIN_RAW.list({ prefix: "exports/", delimiter: "/", limit: 200 });
+  for (const jobPrefix of jobs.delimitedPrefixes) {
+    if (pruned >= 100) break;
+    const metaObj = await env.BRAIN_RAW.get(`${jobPrefix}meta.json`);
+    if (!metaObj) continue;
+    let exp = Number.NaN;
+    try {
+      exp = Number(((await metaObj.json()) as { exp?: number }).exp);
+    } catch {
+      exp = Number.NaN;
+    }
+    if (!Number.isFinite(exp) || exp + grace >= now) continue;
+    const objs = await env.BRAIN_RAW.list({ prefix: jobPrefix, limit: 1000 });
+    for (const o of objs.objects) {
+      if (pruned >= 100) break;
+      await env.BRAIN_RAW.delete(o.key);
+      pruned += 1;
+    }
+  }
+  return pruned;
+}
+
 export async function runSweep(env: Env, now: number = Date.now()): Promise<SweepResult> {
   const del = await env.BRAIN_DB.prepare(`DELETE FROM confirm_tokens WHERE expires_at < ?1`).bind(now).run();
   const pruned_tokens = del.meta.changes ?? 0;
+
+  const pruned_exports = await pruneExportObjects(env, now);
+  if (pruned_exports > 0) console.log(`[sweep] export objects pruned: ${pruned_exports}`);
 
   const expired_proposals = await expireProposals(env, now);
 

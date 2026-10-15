@@ -129,13 +129,13 @@ Spec anchors that pin the behavior:
 **Files:** Modify `src/exporter.ts`, `src/sweep.ts`; extend
 `test/export.test.ts`.
 
-- [ ] **Step 1: Tests** — portable without confirm token 403; with token:
+- [x] **Step 1: Tests** — portable without confirm token 403; with token:
   payloads decrypted, `event_keys` absent, single-use enforced; download once
   works then the R2 object is **gone**; expired link 403; sweep prunes
   objects past exp (+grace) and keeps fresh ones.
-- [ ] **Step 2: Run and watch fail.**
-- [ ] **Step 3: Implement** profile + delete-after-download + `pruneExportObjects` in the sweep.
-- [ ] **Step 4: Gate + commit** — `feat(export): portable profile + retention`.
+- [x] **Step 2: Run and watch fail.**
+- [x] **Step 3: Implement** profile + delete-after-download + `pruneExportObjects` in the sweep.
+- [x] **Step 4: Gate + commit** — `feat(export): portable profile + retention`.
 
 ### Task 4 — restore + clean-account test (done-when core)
 
