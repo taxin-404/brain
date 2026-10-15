@@ -48,3 +48,6 @@ Task 4: complete (commits 53cc77c..bb31732, tests: npx vitest run →    Duratio
 
 Task 5: Ruling: health additions are purely additive — `consolidation.last_run` {id, finished_at, merged, superseded, conflicts, pruned} (newest by finished_at, id tiebreak) and `reflections` count; existing keys untouched so MCP health_report and auth-shape assertions keep passing (verified: full suite green).
 Task 5: complete (commits aed5737..47b8c07, tests: npx vitest run →    Duration  26.63s (transform 2.98s, setup 32.60s, import 4.97s, tests 19.85s, environment 4ms))
+
+Task 6: Ruling: the eval is a regression pin (written after implementation), so RED does not apply — plan step noted honestly. It fixes the design §8 "done when" sentence in code: cross-unit duplicates only (same-unit pair neither sent nor merged), tombstones honored (deleted row stays NULL, FTS empty, id/object absent from the prompt), restricted never serialized (id and text absent), vectors pruned (store shrinks for the superseded victim + the retired temporary fact), run + report recorded.
+Task 6: complete (commits 5675f86..08e1937, tests: npx vitest run →    Duration  27.22s (transform 3.06s, setup 33.79s, import 5.16s, tests 19.85s, environment 6ms))
