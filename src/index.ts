@@ -2,6 +2,7 @@ import type { Env, Need, Scope } from "./env";
 import { resolveScope, requireScope } from "./auth";
 import { json } from "./http";
 import { healthReport } from "./health";
+import { handleEvents } from "./ingest";
 
 export type Handler = (
   request: Request,
@@ -17,6 +18,18 @@ const ROUTES: Array<{ method: string; re: RegExp; need: Need; handler: Handler }
     re: /^\/v1\/health-report$/,
     need: "read",
     handler: async (_r, env) => json(await healthReport(env)),
+  },
+  {
+    method: "POST",
+    re: /^\/v1\/events$/,
+    need: "propose",
+    handler: (request, env, scope) => handleEvents(request, env, scope),
+  },
+  {
+    method: "POST",
+    re: /^\/v1\/events\/batch$/,
+    need: "propose",
+    handler: (request, env, scope) => handleEvents(request, env, scope),
   },
 ];
 
