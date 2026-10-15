@@ -45,3 +45,6 @@ Task 4: Ruling: `routeCron` maps exact trigger strings; unknown triggers log `[c
 Task 4: Ruling: cron mapping covered by unit tests; wrangler.jsonc trigger list verified by grep in the gate (workerd test env cannot read config files) — drift between config and mapping caught by the exact-string tests.
 Task 4: Ruling: weekly = "0 4 * * 1" (Mon 04:00 UTC), monthly = "0 4 1 * *" (1st 04:00 UTC), consolidation "0 3 * * *" — 4 of the 5 free slots; one slot left spare.
 Task 4: complete (commits 53cc77c..bb31732, tests: npx vitest run →    Duration  26.28s (transform 3.00s, setup 31.55s, import 4.82s, tests 19.81s, environment 5ms))
+
+Task 5: Ruling: health additions are purely additive — `consolidation.last_run` {id, finished_at, merged, superseded, conflicts, pruned} (newest by finished_at, id tiebreak) and `reflections` count; existing keys untouched so MCP health_report and auth-shape assertions keep passing (verified: full suite green).
+Task 5: complete (commits aed5737..47b8c07, tests: npx vitest run →    Duration  26.63s (transform 2.98s, setup 32.60s, import 4.97s, tests 19.85s, environment 4ms))
