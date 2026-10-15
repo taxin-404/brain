@@ -78,7 +78,7 @@ export function toEvents(sessionID: string, messages: SessionMessageLike[]): Cap
         actor: "user",
         kind: "message",
         session_id: sessionID,
-        payload: { text: msg.text },
+        payload: { text: truncateStrings(msg.text) },
       });
       continue;
     }
@@ -98,7 +98,7 @@ export function toEvents(sessionID: string, messages: SessionMessageLike[]): Cap
           actor: "assistant",
           kind: "message",
           session_id: sessionID,
-          payload: { text },
+          payload: { text: truncateStrings(text) },
         });
       }
       parts.forEach((part, index) => {
