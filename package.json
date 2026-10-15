@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "test": "vitest run",
-    "deploy": "wrangler deploy"
+    "deploy": "wrangler deploy --env=\"\""
   },
   "devDependencies": {
     "@cloudflare/vitest-plugin": "^1.4.2",
