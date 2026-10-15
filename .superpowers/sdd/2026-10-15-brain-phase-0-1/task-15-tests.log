@@ -31,3 +31,12 @@ Using secrets defined in .dev.vars
    Start at  19:02:22
    Duration  10.66s (transform 2.33s, setup 16.42s, import 359ms, tests 1.27s, environment 1ms)
 
+
+---- re-run for evidence (console interception hid the recall log in the gate run above; --disableConsoleIntercept shows it):
+
+ RUN  v4.1.11 /home/taxin/Work/brain
+recall@5: 12/12
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  19:19:39
+   Duration  2.65s (transform 842ms, setup 1.83s, import 18ms, tests 127ms, environment 0ms)
