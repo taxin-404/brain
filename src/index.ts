@@ -3,6 +3,7 @@ import { resolveScope, requireScope } from "./auth";
 import { json } from "./http";
 import { healthReport } from "./health";
 import { handleEvents } from "./ingest";
+import { handleMintToken, handlePurge } from "./purge";
 
 export type Handler = (
   request: Request,
@@ -30,6 +31,18 @@ const ROUTES: Array<{ method: string; re: RegExp; need: Need; handler: Handler }
     re: /^\/v1\/events\/batch$/,
     need: "propose",
     handler: (request, env, scope) => handleEvents(request, env, scope),
+  },
+  {
+    method: "POST",
+    re: /^\/v1\/confirm\/token$/,
+    need: "admin",
+    handler: (request, env) => handleMintToken(request, env),
+  },
+  {
+    method: "POST",
+    re: /^\/v1\/events\/([A-Za-z0-9_-]+)\/purge$/,
+    need: "admin",
+    handler: (request, env, _scope, _ctx, match) => handlePurge(request, env, match[1]),
   },
 ];
 
