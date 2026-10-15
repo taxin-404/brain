@@ -44,9 +44,11 @@ live acceptance.
 
 **Non-negotiables (every executor session):**
 
-- **Free-tier rules (README):** zero network in tests — `test/setup.ts` runs
-  `setupNetwork()` from `@msw/cloudflare`, and each test registers handlers for
-  every outbound call it expects. Live
+- **Free-tier rules (README):** zero network in tests — files that can make
+  outbound calls opt in to the shared MSW network (`test/server.ts`:
+  `setupNetwork()` + `onUnhandledFrame: "error"`; `beforeAll` enable /
+  `afterEach` reset / `afterAll` disable) and register handlers for every
+  outbound call they expect. Live
   calls only via capped sweep / manual kick / `scripts/eval-live.mjs` (owner-run,
   single-shot). Never loop against `*.workers.dev`.
 - **Never** deploy with `--env prod`; never add a preview trigger; never print
@@ -228,7 +230,7 @@ export async function geminiJson<T>(
 export async function embedTexts(env: Env, texts: string[]): Promise<number[][]> // chunks of ≤10
 ```
 
-- [ ] `geminiJson`: POST `${env.AI_GATEWAY_BASE}/v1beta/models/${model ?? "gemini-3.5-flash-lite"}:generateContent`,
+- [x] `geminiJson`: POST `${env.AI_GATEWAY_BASE}/v1beta/models/${model ?? "gemini-3.5-flash-lite"}:generateContent`,
       headers `content-type: application/json` + `x-goog-api-key: env.GEMINI_API_KEY`;
       body `contents:[{role:"user",parts:[{text: user}]}]` (+`systemInstruction`
       when `system`), `generationConfig: { maxOutputTokens ?? 2048, temperature ??
@@ -236,16 +238,17 @@ export async function embedTexts(env: Env, texts: string[]): Promise<number[][]>
       429/5xx/network with ~500ms backoff); concatenate `candidates[0].content.parts.filter(p => p.text).map(p => p.text)`;
       `JSON.parse` then `validate()` — failures → `LlmError("parse")`; usage from
       `usageMetadata.{promptTokenCount,candidatesTokenCount}` (default 0).
-- [ ] `embedTexts`: POST `${env.AI_GATEWAY_BASE}/v1beta/models/gemini-embedding-001:batchEmbedContents`
+- [x] `embedTexts`: POST `${env.AI_GATEWAY_BASE}/v1beta/models/gemini-embedding-001:batchEmbedContents`
       body `{requests: chunk.map(text => ({ model: "models/gemini-embedding-001", content: { parts: [{ text }] }, outputDimensionality: 768 }))}`;
       assert every `values.length === 768` else `LlmError("parse")`.
-- [ ] Tests (MSW via `@msw/cloudflare`: `setupNetwork()` in `test/setup.ts`,
-      `http.post` handlers per test — note: `fetchMock` does not exist in
-      `@cloudflare/vitest-plugin` 1.4.2): URL + method + `x-goog-api-key` header
-      asserted in the handler; 500-then-200 → success (2 calls); 3×500 →
-      `LlmError` http; malformed body → parse error; embeddings: 3 texts →
-      3×768; 12 texts → 2 requests (chunking).
-- [ ] Gate; commit `feat(phase2): gemini client via ai gateway (json + embeddings)`.
+- [x] Tests (MSW via `@msw/cloudflare`: shared `test/server.ts` singleton with
+      `onUnhandledFrame: "error"` so unmocked calls fail — note: `fetchMock` does
+      not exist in `@cloudflare/vitest-plugin` 1.4.2): URL + method +
+      `x-goog-api-key` header asserted in the handler; 500-then-200 → success
+      (2 calls); 3×500 → `LlmError` http; 4xx → fail fast (1 call); malformed
+      body → parse error; embeddings: 12 texts → 2 requests of 10+2, 768 dims
+      asserted.
+- [x] Gate; commit `feat(phase2): gemini client via ai gateway (json + embeddings)`.
 
 ## Task 3 — `src/prompts.ts` + `src/facts.ts`: prompts, parsing, rules (pure)
 
