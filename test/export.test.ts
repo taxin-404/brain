@@ -1,5 +1,5 @@
 import { env } from "cloudflare:workers";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { contentHmac, decryptPayload } from "../src/crypto";
 import { ingestEvents, type EventInput } from "../src/ingest";
 import { runSweep } from "../src/sweep";
@@ -173,6 +173,47 @@ describe("export — portable profile + retention", () => {
     expect(await dl.text()).toContain("portable-world");
     expect((await listParts(body.job)).objects.length).toBe(0);
     expect((await call("GET", body.url)).status).toBe(404);
+  });
+
+  it("deletes meta first so failed part deletes can never serve a fragment", async () => {
+    const eventId = await seedEvent("delete order", { v: 1 });
+    const token = await mintExportToken();
+    const res = await call(
+      "GET",
+      `/v1/export?profile=portable&confirm_token=${token}`,
+      undefined,
+      bearer(env, "ADMIN"),
+    );
+    const body = await res.json<{ job: string; url: string }>();
+
+    // Meta deletes succeed; every part delete fails (transient R2 error).
+    const original = env.BRAIN_RAW.delete.bind(env.BRAIN_RAW);
+    const calls: string[] = [];
+    const spy = vi.spyOn(env.BRAIN_RAW, "delete").mockImplementation(async (keys: string | string[]) => {
+      const key = Array.isArray(keys) ? keys.join(",") : keys;
+      calls.push(key);
+      if (key.endsWith("meta.json")) return original(key);
+      throw new Error("r2 transient");
+    });
+    try {
+      // The client still receives the full artifact.
+      const dl = await call("GET", body.url);
+      expect(dl.status).toBe(200);
+      expect(await dl.text()).toContain(`payloads/${eventId}`);
+    } finally {
+      spy.mockRestore();
+    }
+
+    // Meta went first — no fragment can ever be served again…
+    expect(calls.length).toBeGreaterThan(0);
+    expect(calls[0].endsWith("meta.json")).toBe(true);
+    expect(await env.BRAIN_RAW.get(`exports/${body.job}/meta.json`)).toBeNull();
+    expect((await call("GET", body.url)).status).toBe(404);
+    // …stranded parts are the sweep's job, not the download's.
+    const left = (await listParts(body.job)).objects;
+    expect(left.length).toBeGreaterThan(0);
+    for (const o of left) await env.BRAIN_RAW.delete(o.key);
+    expect((await listParts(body.job)).objects.length).toBe(0);
   });
 
   it("sweep prunes expired export objects and keeps fresh ones", async () => {

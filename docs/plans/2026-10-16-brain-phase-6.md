@@ -243,11 +243,11 @@ try/catch each part delete (sweep is the backstop).
 
 **Files:** Modify `src/exporter.ts`; extend `test/export.test.ts`.
 
-- [ ] **Step 1: Test** — inject part-delete failures: download still serves the
+- [x] **Step 1: Test** — inject part-delete failures: download still serves the
   full artifact; a second download 404s (meta gone) even though parts remain.
-- [ ] **Step 2: Run and watch fail.**
-- [ ] **Step 3: Implement** meta-first + per-key try/catch.
-- [ ] **Step 4: Gate + commit** — `fix(export): meta-first portable deletion`.
+- [x] **Step 2: Run and watch fail.**
+- [x] **Step 3: Implement** meta-first + per-key try/catch.
+- [x] **Step 4: Gate + commit** — `fix(export): meta-first portable deletion`.
 
 ## Merge + acceptance (closing — one push)
 

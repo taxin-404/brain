@@ -569,9 +569,22 @@ export async function handleExportDownload(env: Env, job: string, url: URL): Pro
       }
       if (profile === "portable") {
         // "auto-delete from R2 after download" — deletes run before the writer
-        // closes, so by the time the client sees EOF the job is gone.
-        for (const o of sorted) await env.BRAIN_RAW.delete(o.key);
-        await env.BRAIN_RAW.delete(metaKey(job));
+        // closes, so by the time the client sees EOF the job is gone. Meta
+        // goes FIRST: once it is gone, any retry or restore 404s instead of
+        // being served a fragment left by a failed part delete. Part deletes
+        // are best-effort (the sweep prunes stragglers after exp).
+        try {
+          await env.BRAIN_RAW.delete(metaKey(job));
+        } catch (err) {
+          console.error("portable meta delete failed", job, err);
+        }
+        for (const o of sorted) {
+          try {
+            await env.BRAIN_RAW.delete(o.key);
+          } catch (err) {
+            console.error("portable part delete failed", o.key, err);
+          }
+        }
       }
     } finally {
       await writer.close();
