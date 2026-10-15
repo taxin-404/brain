@@ -3,8 +3,10 @@
 Personal neural memory for OpenCode sessions — capture, redact, encrypt at rest,
 search, and recall into future sessions. Runs on Cloudflare Workers (D1 + R2).
 
-**Status: Phase 0 delivered & live · Phase 1 in progress** — Tasks 1–14 of 15
-complete (48 Worker + 3 plugin tests green, deployed live, acceptance passed), Task 15 (keyword eval harness) next.
+**Status: Phase 0 delivered & live · Phase 1 complete** — all 15 planned tasks done
+(48 Worker + 3 plugin tests green, deployed live, acceptance + eval gate passed).
+Capture is proven end-to-end; global plugin registration awaits the owner's go-ahead
+(see `.superpowers/sdd/2026-10-15-brain-phase-0-1/task-14-log.md`).
 
 ## Read-first map
 
@@ -67,7 +69,7 @@ live in `vitest.config.ts` miniflare bindings — the suite runs from a fresh cl
 | 12 | `*/30` sweep cron | ✅ |
 | 13 | OpenCode capture plugin (`plugin/`) | ✅ |
 | 14 | Phase 1 acceptance — live capture + MCP recall proven, race fix | ✅ |
-| 15 | eval harness | ⏳ |
+| 15 | keyword eval harness: recall@5 ≥ 0.9 regression gate (12 real pairs) | ✅ |
 
 ## For AI agents
 

@@ -18,9 +18,8 @@ Using secrets defined in .dev.vars
 
  Test Files  14 passed (14)
       Tests  48 passed (48)
-   Start at  18:58:31
-   Duration  10.06s (transform 2.32s, setup 15.96s, import 327ms, tests 1.22s, environment 0ms)
-
+   Start at  19:01:48
+   Duration  11.21s (transform 2.28s, setup 17.72s, import 381ms, tests 1.45s, environment 4ms)
 
 
  RUN  v4.1.11 /home/taxin/Work/brain/plugin
@@ -28,6 +27,6 @@ Using secrets defined in .dev.vars
 
  Test Files  1 passed (1)
       Tests  3 passed (3)
-   Start at  18:58:43
-   Duration  184ms (transform 29ms, setup 0ms, import 41ms, tests 8ms, environment 0ms)
+   Start at  19:02:00
+   Duration  191ms (transform 33ms, setup 0ms, import 49ms, tests 6ms, environment 0ms)
 
