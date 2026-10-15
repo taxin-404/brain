@@ -21,3 +21,11 @@ plan edits. No new model calls, cron entries, secrets, or migrations this phase.
   (manual tier; versions are append-only).
 - Read routes: GET /v1/procedures + GET /v1/procedures/:id (read scope).
 - Procedures not embedded/searched this phase (done-when doesn't require it).
+
+Task 1: Ruling: validation caps pinned in code (name 120, steps 1–50 ×500, trigger 2000, tools 50, criteria/notes 2000); all validation failures are ReviewError("conflict") → 400 — consistent with block_edit. ReviewError gains code `untrusted_origin` (→ 400 via the default mapping).
+Task 1: Ruling: `promoted_from_events` stores a JSON array (`[eventId]`) or NULL when no evidence — column is plural by design and future promotion flows may cite several events.
+Task 1: Ruling: no-evidence procedures get `origin_trust = 0.5` (neutral/conservative); evidence-based promotion carries the event's trust; external is a hard refuse with nothing written (no audit, proposal stays pending).
+Task 1: Ruling: versioning is append-only; a deprecated target refuses new versions; `last_success_at` stays reserved (no execution tracking this phase). Undo for procedure proposals is refused (`unsupported`) in undoProposal.
+Task 1: The old Phase-3 placeholder test in test/review.test.ts ("unsupported until Phase 5") was replaced with the real promotion assertion — expected change, not a regression workaround.
+Task 1: module cycle note: procedures.ts ↔ review.ts import each other (ReviewError / promoteProcedureProposal); safe like the existing proposals↔review cycle because usages are call-time only.
+Task 1: complete (commits de88827..0bd3ffa, tests: npx vitest run →    Duration  28.17s (transform 3.05s, setup 34.85s, import 5.27s, tests 19.90s, environment 8ms))
