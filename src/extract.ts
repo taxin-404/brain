@@ -1,5 +1,6 @@
 import type { Env } from "./env";
 import { writeAudit } from "./audit";
+import { embedPendingFacts } from "./embed";
 import { resolveSubject } from "./entities";
 import { newFactId, normalizeCandidates, type SourceActor, type SourceContext } from "./facts";
 import { EXTRACTION_MODEL, geminiJson, LlmError } from "./llm";
@@ -11,6 +12,10 @@ export interface ExtractionRun {
   failed: number;
   calls: number;
   injection: number;
+  /** facts embedded + upserted into Vectorize by the run's trailing embed pass */
+  embedded: number;
+  /** embedding passes that failed (retried on a later sweep) */
+  embedFailed: number;
 }
 
 export const EXTRACTION_CAPS = {
@@ -56,7 +61,7 @@ export async function processExtractions(
   const maxEvents = opts.maxEvents ?? EXTRACTION_CAPS.sweep.maxEvents;
   const maxCalls = opts.maxCalls ?? EXTRACTION_CAPS.sweep.maxCalls;
   const db = env.BRAIN_DB;
-  const run: ExtractionRun = { processed: 0, facts: 0, failed: 0, calls: 0, injection: 0 };
+  const run: ExtractionRun = { processed: 0, facts: 0, failed: 0, calls: 0, injection: 0, embedded: 0, embedFailed: 0 };
 
   // 1. queue extractable events that have no row yet (restricted and purged
   //    events never queue; tombstones are system bookkeeping, not content)
@@ -215,6 +220,11 @@ export async function processExtractions(
       if (status === "failed") run.failed += chunk.length;
     }
   }
+
+  // 6. embed newly created facts (best-effort; failures retry next sweep)
+  const embs = await embedPendingFacts(env);
+  run.embedded = embs.embedded;
+  run.embedFailed = embs.failed;
 
   return run;
 }

@@ -354,7 +354,7 @@ export async function embedPendingFacts(
 export function fakeVec(text: string, dims = 768): number[] // deterministic unit-ish vector from a seeded hash
 ```
 
-- [ ] Select `vec_id IS NULL AND sensitivity != 'restricted' AND status='active'`
+- [x] Select `vec_id IS NULL AND sensitivity != 'restricted' AND status='active'`
       facts joined to `entities.name`; chunk ≤10; `embedTexts`; then
       `env.VECTORIZE.upsert(chunk.map(f => ({ id: f.id, values: vec,
       metadata: { fact_id: f.id, type: "fact", status: f.status, sensitivity:
@@ -363,12 +363,12 @@ export function fakeVec(text: string, dims = 768): number[] // deterministic uni
       next sweep); never throw out of the run. Call `embedPendingFacts` at the
       end of `processExtractions` and return its counts in `ExtractionRun` +
       `embedded`.
-- [ ] Tests (Vectorize faked via `vi.spyOn(env.VECTORIZE, …)` + MSW returning
+- [x] Tests (Vectorize faked via `vi.spyOn(env.VECTORIZE, …)` + MSW returning
       `fakeVec` of the input text): facts get `vec_id` set;
       `env.VECTORIZE.query(fakeVec("seed text"))` returns that fact id first;
       restricted fact never embedded; metadata exact;
       embedding 500s → `failed ≥ 1`, `vec_id` stays NULL, function still returns.
-- [ ] Gate; commit `feat(phase2): fact embeddings + vectorize upsert`.
+- [x] Gate; commit `feat(phase2): fact embeddings + vectorize upsert`.
 
 ## Task 6 — Blended search + `GET /v1/facts/:id`
 

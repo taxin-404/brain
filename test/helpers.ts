@@ -28,3 +28,18 @@ export async function call(method: string, path: string, body?: unknown, headers
     body: body === undefined ? undefined : JSON.stringify(body),
   });
 }
+
+/** Deterministic pseudo-embedding for tests (unit-length, seeded by the text):
+ *  identical texts produce identical vectors, so a fake index can rank by
+ *  cosine without a real model. */
+export function fakeVec(text: string, dims = 768): number[] {
+  let h = 2166136261;
+  const out: number[] = new Array(dims);
+  for (let i = 0; i < dims; i += 1) {
+    h ^= text.charCodeAt(i % (text.length || 1));
+    h = Math.imul(h, 16777619) >>> 0;
+    out[i] = (h / 0xffffffff) * 2 - 1;
+  }
+  const norm = Math.sqrt(out.reduce((s, v) => s + v * v, 0)) || 1;
+  return out.map((v) => v / norm);
+}

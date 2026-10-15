@@ -7,6 +7,7 @@ import { EXTRACTION_CAPS, processExtractions } from "../src/extract";
 import { network } from "./server";
 
 const GEN_URL = "https://gw.test/google-ai-studio/v1beta/models/gemini-3.5-flash-lite:generateContent";
+const EMB_URL = "https://gw.test/google-ai-studio/v1beta/models/gemini-embedding-001:batchEmbedContents";
 
 interface Line {
   event_id: string;
@@ -116,6 +117,9 @@ describe("processExtractions", () => {
         })),
       ),
     );
+    // embedding has its own test file; fail it fast here so the run under test
+    // only exercises the extraction path (vec_id stays NULL, counted not thrown)
+    network.use(http.post(EMB_URL, () => HttpResponse.text("embedding not part of this test", { status: 400 })));
 
     const run = await processExtractions(env, { now });
     expect(run).toMatchObject({ processed: 2, facts: 2, failed: 0, calls: 1, injection: 0 });
@@ -198,6 +202,8 @@ describe("processExtractions", () => {
         })),
       ),
     );
+    network.use(http.post(EMB_URL, () => HttpResponse.text("embedding not part of this test", { status: 400 })));
+
     const run1 = await processExtractions(env, { now: 2000 });
     expect(run1.facts).toBe(1);
     const created = await env.BRAIN_DB.prepare(
