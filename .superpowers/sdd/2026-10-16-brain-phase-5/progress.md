@@ -35,3 +35,7 @@ Task 2: Ruling: audit action for the gate is `approve_procedure` (distinct from 
 Task 2: Ruling: apply of an external-evidence procedure proposal through the generic REST route surfaces 400 `untrusted_origin` automatically via the existing ReviewError mapping.
 Task 2: gotcha: shared-DB test files accumulate state — name-matching versioning means test procedures must use unique names per test or later applies silently target earlier (possibly deprecated) rows.
 Task 2: complete (commits 5db9b1d..481822e, tests: npx vitest run →    Duration  28.00s (transform 3.04s, setup 34.74s, import 5.27s, tests 20.04s, environment 7ms))
+
+Task 3: Ruling: read routes (GET /v1/procedures, GET /v1/procedures/:id) are ops/inspector additions ledgered like GET /v1/why — design §5 lists no procedure reads, but verify/debug needs them and Phase 6's inspector will consume them. List ordered created_at DESC, id DESC; version history newest-first with raw `steps`/`tools` JSON strings (clients parse). `GET /v1/procedures/:id` stays read-scope; unknown id 404s.
+Task 3: Route regexes: `/^\/v1\/procedures$/` and `/^\/v1\/procedures\/([^/]+)$/` cannot swallow the approve route because matching is exact-anchored per route entry and the approve entry is declared first.
+Task 3: complete (commits c86a29e..7e96536, tests: npx vitest run →    Duration  28.24s (transform 3.05s, setup 35.63s, import 5.36s, tests 20.05s, environment 7ms))
