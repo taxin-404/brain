@@ -121,12 +121,12 @@ status, current_version, origin_trust, last_success_at, created_at}]}`;
 `handleGetProcedure(env, id)` → `{procedure, versions:[...]}` newest first;
 404 unknown; need read.
 
-- [ ] **Step 1: Tests** — list surfaces a created procedure; get returns both
+- [x] **Step 1: Tests** — list surfaces a created procedure; get returns both
   versions after a v2 (v1 payload intact); 404 unknown; MCP_READ works;
   MCP_PROPOSE → 403 (strict read).
-- [ ] **Step 2: Run and watch fail.**
-- [ ] **Step 3: Implement** both handlers + routes.
-- [ ] **Step 4: Gate + commit** — `feat(procedures): list + detail read routes`.
+- [x] **Step 2: Run and watch fail.**
+- [x] **Step 3: Implement** both handlers + routes.
+- [x] **Step 4: Gate + commit** — `feat(procedures): list + detail read routes`.
 
 ### Task 4 — MCP surface + done-when eval
 

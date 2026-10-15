@@ -243,3 +243,36 @@ describe("procedure approval gate", () => {
     expect((await res.json<{ error: string }>()).error).toBe("untrusted_origin");
   });
 });
+
+describe("procedure read routes", () => {
+  beforeEach(() => {
+    installFakeVectorize();
+  });
+
+  it("lists procedures and serves one with its full version history (newest first)", async () => {
+    const pid = await seedProposal({ name: "Read route procedure", steps: ["v1 step"] });
+    const res1 = await applyProposal(env, pid, { actor: "user" });
+    const procedureId = res1.procedure_id!;
+    const pid2 = await seedProposal({ procedure_id: procedureId, name: "Read route procedure", steps: ["v1 step", "v2 step"] });
+    await applyProposal(env, pid2, { actor: "user" });
+
+    const list = await call("GET", "/v1/procedures", undefined, bearer(env, "MCP_READ"));
+    expect(list.status).toBe(200);
+    const listed = (await list.json<{ procedures: Array<{ id: string; current_version: number }> }>()).procedures;
+    const entry = listed.find((p) => p.id === procedureId);
+    expect(entry?.current_version).toBe(2);
+
+    const detail = await call("GET", `/v1/procedures/${procedureId}`, undefined, bearer(env, "MCP_READ"));
+    expect(detail.status).toBe(200);
+    const body = await detail.json<{
+      procedure: { id: string; status: string; current_version: number };
+      versions: Array<{ version: number; steps: string }>;
+    }>();
+    expect(body.procedure).toMatchObject({ id: procedureId, status: "draft", current_version: 2 });
+    expect(body.versions.map((v) => v.version)).toEqual([2, 1]);
+    expect(JSON.parse(body.versions[1].steps)).toEqual(["v1 step"]); // v1 intact
+
+    expect((await call("GET", "/v1/procedures/nope", undefined, bearer(env, "MCP_READ"))).status).toBe(404);
+    expect((await call("GET", "/v1/procedures", undefined, bearer(env, "MCP_PROPOSE"))).status).toBe(403);
+  });
+});

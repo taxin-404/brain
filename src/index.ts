@@ -13,7 +13,7 @@ import { handleSearch } from "./search";
 import { handleGetBlocks, handlePutBlock } from "./blocks";
 import { handleMcp } from "./mcp";
 import { handleListProposals } from "./proposals";
-import { handleApproveProcedure } from "./procedures";
+import { handleApproveProcedure, handleGetProcedure, handleListProcedures } from "./procedures";
 import { handleFactReview, handleProposalReview } from "./review";
 import { runSweep } from "./sweep";
 
@@ -115,6 +115,18 @@ const ROUTES: Array<{ method: string; re: RegExp; need: Need; handler: Handler }
     re: /^\/v1\/procedures\/([^/]+)\/approve$/,
     need: "admin",
     handler: (_request, env, _scope, _ctx, match) => handleApproveProcedure(env, match[1]),
+  },
+  {
+    method: "GET",
+    re: /^\/v1\/procedures$/,
+    need: "read",
+    handler: (_request, env) => handleListProcedures(env),
+  },
+  {
+    method: "GET",
+    re: /^\/v1\/procedures\/([^/]+)$/,
+    need: "read",
+    handler: (_request, env, _scope, _ctx, match) => handleGetProcedure(env, match[1]),
   },
   {
     method: "GET",

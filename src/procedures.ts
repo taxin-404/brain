@@ -211,6 +211,33 @@ export async function approveProcedure(
 
 const approveErrorStatus = (code: string): number => (code === "not_found" ? 404 : code === "conflict" ? 409 : 400);
 
+/** GET /v1/procedures — list (read scope). Ops + inspector groundwork. */
+export async function handleListProcedures(env: Env): Promise<Response> {
+  const { results } = await env.BRAIN_DB.prepare(
+    `SELECT id, name, status, current_version, origin_trust, last_success_at, created_at
+     FROM procedures ORDER BY created_at DESC, id DESC`,
+  ).all();
+  return json({ procedures: results });
+}
+
+/** GET /v1/procedures/:id — procedure + full version history (newest first). */
+export async function handleGetProcedure(env: Env, procedureId: string): Promise<Response> {
+  const row = await env.BRAIN_DB.prepare(
+    `SELECT id, name, status, current_version, origin_trust, last_success_at, created_at
+     FROM procedures WHERE id = ?1`,
+  )
+    .bind(procedureId)
+    .first();
+  if (!row) return json({ error: "not_found" }, 404);
+  const { results: versions } = await env.BRAIN_DB.prepare(
+    `SELECT id, version, trigger, steps, tools, success_criteria, failure_notes, promoted_from_events, created_at
+     FROM procedure_versions WHERE procedure_id = ?1 ORDER BY version DESC`,
+  )
+    .bind(procedureId)
+    .all();
+  return json({ procedure: row, versions });
+}
+
 /** POST /v1/procedures/:id/approve — ADMIN only. */
 export async function handleApproveProcedure(env: Env, procedureId: string): Promise<Response> {
   try {
