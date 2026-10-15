@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import { contentHmac, decryptPayload } from "../src/crypto";
-import { ingestEvents } from "../src/ingest";
+import { ingestEvents, type EventInput } from "../src/ingest";
 import { runSweep } from "../src/sweep";
 import { bearer, call } from "./helpers";
 
@@ -248,5 +248,64 @@ describe("export — resumable jobs (free-plan subrequest ceiling)", () => {
     expect((await call("GET", "/v1/export?job=doesnotexist", undefined, bearer(env, "ADMIN"))).status).toBe(404);
     // Resuming needs no new confirm token; starting portable still does.
     expect((await call("GET", "/v1/export?profile=portable", undefined, bearer(env, "ADMIN"))).status).toBe(403);
+  });
+
+  it("pages the table walk across invocations (CPU ceiling)", async () => {
+    // >400 event rows: 10 ms CPU/invocation cannot stringify whole tables.
+    const batch: EventInput[] = Array.from({ length: 405 }, (_, i) => ({
+      source: "manual",
+      actor: "user",
+      kind: "note",
+      excerpt: `bulk ${i}`,
+      payload: { i },
+    }));
+    const ingested = await ingestEvents(env, "ADMIN", batch);
+    const seeded = new Set(ingested.results.map((r) => r.id));
+
+    const first = await call("GET", "/v1/export?profile=backup", undefined, bearer(env, "ADMIN"));
+    const b1 = await first.json<{ job: string; done: boolean; url: string }>();
+    expect(b1.done).toBe(false);
+
+    // The parts written so far hold at most one 400-row slice of events.
+    const partKeys = (await listParts(b1.job)).objects
+      .filter((o) => o.key.endsWith(".ndjson"))
+      .map((o) => o.key)
+      .sort();
+    const firstLines: any[] = [];
+    for (const k of partKeys) {
+      const t = await (await env.BRAIN_RAW.get(k))!.text();
+      firstLines.push(...t.split("\n").filter(Boolean).map((l) => JSON.parse(l)));
+    }
+    const rowsSoFar = firstLines.filter((l) => l.table === "events").flatMap((l) => l.rows);
+    expect(rowsSoFar.length).toBeGreaterThan(0);
+    expect(rowsSoFar.length).toBeLessThanOrEqual(400);
+
+    // Resume to done, bounded.
+    let view = b1;
+    let calls = 0;
+    while (!view.done && calls < 30) {
+      const res = await call("GET", `/v1/export?job=${b1.job}`, undefined, bearer(env, "ADMIN"));
+      expect(res.status).toBe(200);
+      view = await res.json();
+      calls += 1;
+    }
+    expect(view.done).toBe(true);
+    expect(calls).toBeGreaterThan(1);
+
+    // Every seeded event lands in the artifact exactly once.
+    const dl = await call("GET", b1.url);
+    expect(dl.status).toBe(200);
+    const lines = (await dl.text())
+      .split("\n")
+      .filter(Boolean)
+      .map((l) => JSON.parse(l) as Record<string, unknown>);
+    const ids = lines
+      .filter((l) => l.table === "events")
+      .flatMap((l) => l.rows as Array<{ id: string }>)
+      .map((r) => r.id);
+    const seen = new Map<string, number>();
+    for (const id of ids) seen.set(id, (seen.get(id) ?? 0) + 1);
+    for (const id of seeded) expect(seen.get(id)).toBe(1);
+    for (const n of seen.values()) expect(n).toBe(1);
   });
 });

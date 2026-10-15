@@ -1,5 +1,5 @@
 import { writeAudit } from "./audit";
-import { contentHmac, decryptPayload, newEventId } from "./crypto";
+import { contentHmac, decryptPayloadWithKek, newEventId, payloadKek } from "./crypto";
 import type { Env } from "./env";
 import { json } from "./http";
 import { consumeConfirmToken, PurgeError } from "./purge";
@@ -44,6 +44,11 @@ const PART_BYTES = 4 * 1024 * 1024;
  *  (`state:"running"` → resume via `GET /v1/export?job=…` until `done:true`). */
 const DEFAULT_EXPORT_SLICE = 200;
 export const MAX_EXPORT_SLICE = 500;
+/** Portable decrypts have real per-object CPU cost on the free plan (10 ms);
+ *  keep the payload page under the backup default. */
+const PORTABLE_PAYLOAD_PAGE = 100;
+/** Table rows stringified per invocation (1 MB in one call flaked 1102). */
+const TABLES_ROWS_PER_CALL = 400;
 const DEFAULT_RESTORE_SLICE = 800;
 export const MAX_RESTORE_SLICE = 1200;
 
@@ -66,6 +71,8 @@ interface ExportMeta {
   seq: number;
   parts: number;
   tables: boolean;
+  table_index: number;
+  row_offset: number;
 }
 
 interface RestoreState {
@@ -102,6 +109,8 @@ const readMeta = async (env: Env, job: string): Promise<ExportMeta | null> => {
       seq: typeof m.seq === "number" ? m.seq : typeof m.parts === "number" ? m.parts : 0,
       parts: typeof m.parts === "number" ? m.parts : 0,
       tables: m.tables !== false,
+      table_index: typeof m.table_index === "number" ? m.table_index : 0,
+      row_offset: typeof m.row_offset === "number" ? m.row_offset : 0,
     };
   } catch {
     return null;
@@ -335,6 +344,9 @@ async function exportSlice(env: Env, job: string, meta: ExportMeta, slice: numbe
     if (size >= PART_BYTES) await flush();
   };
 
+  let ti = meta.table_index;
+  let off = meta.row_offset;
+  let tablesDone = meta.tables;
   if (!meta.tables) {
     await line(
       JSON.stringify({
@@ -346,18 +358,54 @@ async function exportSlice(env: Env, job: string, meta: ExportMeta, slice: numbe
         tables: [...tables, "r2_payloads"],
       }),
     );
-    for (const table of tables) {
-      const { results } = await env.BRAIN_DB.prepare(`SELECT * FROM ${table}`).all();
-      for (let i = 0; i < results.length; i += CHUNK_ROWS) {
-        await line(JSON.stringify({ table, rows: results.slice(i, i + CHUNK_ROWS) }));
+    // Tables walk in ≤400-row slices: LIMIT/OFFSET pages with the position in
+    // meta.json. When the budget runs out mid-table the call ends early —
+    // the payload walk only starts on a call that finished the tables.
+    let rowsLeft = TABLES_ROWS_PER_CALL;
+    while (ti < tables.length && rowsLeft > 0) {
+      const table = tables[ti];
+      const requested = rowsLeft;
+      const { results } = await env.BRAIN_DB.prepare(`SELECT * FROM ${table} LIMIT ?1 OFFSET ?2`)
+        .bind(requested, off)
+        .all();
+      const got = results.length;
+      if (got > 0) {
+        for (let i = 0; i < got; i += CHUNK_ROWS) {
+          await line(JSON.stringify({ table, rows: results.slice(i, i + CHUNK_ROWS) }));
+        }
+        off += got;
+        rowsLeft -= got;
+      }
+      if (got < requested) {
+        ti += 1;
+        off = 0;
       }
     }
+    tablesDone = ti >= tables.length;
+  }
+
+  if (!tablesDone) {
+    // Budget spent inside the tables: flush, persist position, end the call.
+    await flush();
+    const next: ExportMeta = {
+      ...meta,
+      tables: false,
+      table_index: ti,
+      row_offset: off,
+      seq,
+      parts: seq,
+      state: "running",
+    };
+    await env.BRAIN_RAW.put(metaKey(job), JSON.stringify(next));
+    return next;
   }
 
   // Raw payload objects (R2): one bounded page per invocation. Backup ships
   // ciphertext; portable decrypts with the KEK + wrapped key per event.
-  const list = await env.BRAIN_RAW.list({ prefix: "payloads/", cursor: meta.cursor ?? undefined, limit: slice });
+  const page = profile === "portable" ? Math.min(slice, PORTABLE_PAYLOAD_PAGE) : slice;
+  const list = await env.BRAIN_RAW.list({ prefix: "payloads/", cursor: meta.cursor ?? undefined, limit: page });
   const wrappedKeys = profile === "portable" && list.objects.length > 0 ? await loadWrappedKeys(env) : null;
+  const kek = profile === "portable" && list.objects.length > 0 ? await payloadKek(env.PAYLOAD_KEK) : null;
   for (const obj of list.objects) {
     const body = await env.BRAIN_RAW.get(obj.key);
     if (!body) continue;
@@ -369,9 +417,9 @@ async function exportSlice(env: Env, job: string, meta: ExportMeta, slice: numbe
       let text: string | null = null;
       const eventId = obj.key.slice("payloads/".length);
       const wrappedKey = wrappedKeys?.get(eventId);
-      if (wrappedKey) {
+      if (wrappedKey && kek) {
         try {
-          text = await decryptPayload(env.PAYLOAD_KEK, wrappedKey, blob);
+          text = await decryptPayloadWithKek(kek, wrappedKey, blob);
         } catch {
           text = null;
         }
@@ -385,6 +433,8 @@ async function exportSlice(env: Env, job: string, meta: ExportMeta, slice: numbe
   const next: ExportMeta = {
     ...meta,
     tables: true,
+    table_index: ti,
+    row_offset: 0,
     cursor,
     seq,
     parts: seq,
@@ -421,6 +471,8 @@ export async function startExport(
     seq: 0,
     parts: 0,
     tables: false,
+    table_index: 0,
+    row_offset: 0,
   };
   const next = await exportSlice(env, job, meta, clampSlice(opts.limit, MAX_EXPORT_SLICE, DEFAULT_EXPORT_SLICE));
   return { status: 200, body: await exportView(env, job, next) };

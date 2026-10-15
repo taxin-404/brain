@@ -210,7 +210,10 @@ the portable payload page at 100 objects.
 
 - [ ] **Step 1: Tests** — seed >400 events: first export call ends
   `state:"running"` with ≤400 event rows in the first part; resume until done;
-  every seeded event present exactly once in the artifact.\n- [ ] **Step 2: Run and watch fail.**\n- [ ] **Step 3: Implement** sliced tables + hoisted KEK + portable page cap.\n- [ ] **Step 4: Gate + commit** — `fix(export): slice tables + hoist KEK for CPU ceiling`.
+  every seeded event present exactly once in the artifact.
+- [x] **Step 2: Run and watch fail.**
+- [x] **Step 3: Implement** sliced tables + hoisted KEK + portable page cap.
+- [x] **Step 4: Gate + commit** — `fix(export): slice tables + hoist KEK for CPU ceiling`.
 
 ## Merge + acceptance (closing — one push)
 

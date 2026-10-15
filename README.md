@@ -205,7 +205,10 @@ inspector.
   ships ciphertext + wrapped keys — a leaked link exposes nothing without the
   KEK. `portable` additionally requires a single-use confirm token
   (`POST /v1/confirm/token`, target `export:portable`), decrypts payloads on
-  the walk, and omits wrapped keys.
+  the walk, and omits wrapped keys. The walk pages across invocations (Workers
+  Free caps subrequests and CPU per request): a response reports
+  `state:"running"|"done"`, the admin repeats `GET /v1/export?job=…` until
+  done, and downloads 409 in the meantime.
 - **Links + retention:** downloads ride an HMAC-signed URL (`?exp&token`,
   15-minute TTL, constant-time compare) requiring **no bearer** token.
   Portable jobs delete themselves from R2 right after the first download;
@@ -213,7 +216,9 @@ inspector.
   objects per run).
 - **Restore:** `POST /v1/restore {job}` (ADMIN) reads a backup export back
   into a fresh account — schema from migrations, zero rows — and rebuilds
-  both FTS indexes. Payloads stay encrypted at rest; the wrapped keys unwrap
+  both FTS indexes. Payload re-puts are sliced too: a response reports
+  `done:true|false` and the same POST resumes (idempotent; INSERT OR REPLACE).
+  Payloads stay encrypted at rest; the wrapped keys unwrap
   with `PAYLOAD_KEK` alone. The clean-account proof is
   `test/eval-restore.test.ts`: the §8 done-when sentence (export → wipe →
   restore → verified through the read routes, payload decrypted with the KEK).

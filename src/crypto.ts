@@ -48,9 +48,18 @@ export async function encryptPayload(
   return { blob: blob.buffer, wrappedKey: bytesToBase64(wrappedBytes) };
 }
 
-export async function decryptPayload(kekSecret: string, wrappedKey: string, blob: ArrayBuffer): Promise<string> {
-  const kek = await aesKeyFromSecret(kekSecret, ["encrypt", "decrypt"]);
+/** Import the payload KEK once per invocation; reuse across many blobs.
+ *  (Per-object `aesKeyFromSecret` costs a SHA-256 + importKey each — that
+ *  flaked the Workers Free 10 ms CPU budget on the portable export walk.) */
+export async function payloadKek(kekSecret: string): Promise<CryptoKey> {
+  return aesKeyFromSecret(kekSecret, ["encrypt", "decrypt"]);
+}
 
+export async function decryptPayloadWithKek(
+  kek: CryptoKey,
+  wrappedKey: string,
+  blob: ArrayBuffer,
+): Promise<string> {
   const wrappedBytes = base64ToBytes(wrappedKey);
   const dataKeyBytes = await crypto.subtle.decrypt(
     { name: "AES-GCM", iv: wrappedBytes.subarray(0, 12) },
@@ -69,6 +78,10 @@ export async function decryptPayload(kekSecret: string, wrappedKey: string, blob
     blobBytes.subarray(12),
   );
   return dec.decode(plaintext);
+}
+
+export async function decryptPayload(kekSecret: string, wrappedKey: string, blob: ArrayBuffer): Promise<string> {
+  return decryptPayloadWithKek(await payloadKek(kekSecret), wrappedKey, blob);
 }
 
 export async function contentHmac(secret: string, body: string): Promise<string> {
