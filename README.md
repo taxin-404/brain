@@ -9,6 +9,23 @@ Capture and MCP recall are registered globally in the owner's OpenCode config an
 proven live end-to-end (owner-approved 2026-10-15; see
 `.superpowers/sdd/2026-10-15-brain-phase-0-1/task-14-log.md`).
 
+## ⚠️ Free-tier rules — every agent must read this
+
+This account runs on Cloudflare's free tier (plus a small, capped Gemini budget in
+Phase 2). An agent once "tested" a deployed worker with a request loop and burned
+the account's daily free request limit in seconds. No exceptions, ever:
+
+- **Never run load, stress, soak, or benchmark tests against deployed workers**
+  (`*.workers.dev`). No request loops, no parallel hammering. All tests run
+  locally: `npx vitest run` uses real `workerd` with zero network.
+- **Prod verification = single-shot requests only.** A few one-off curls are
+  fine; a `for` loop against the live URL is not. (Cloudflare's management API
+  and Workers Builds endpoints don't consume the worker request quota, but keep
+  polling there minimal too.)
+- **Quotas to respect:** Workers 100k requests/day · D1 100k row-writes/day (the
+  in-app `rate_budgets` breaker at 80k protects this) · Vectorize 5M stored dims ·
+  Queues 10k ops/day · Gemini calls under the Google Cloud budget alert (~$5/mo).
+
 ## Read-first map
 
 | Doc | What it is |
