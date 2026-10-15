@@ -1,0 +1,12 @@
+[
+  { "q": "which code editor does the user like", "expect": "neovim" },
+  { "q": "where does the user live", "expect": "portland" },
+  { "q": "which database does the user run locally", "expect": "postgres" },
+  { "q": "what is the user's preferred note taking app", "expect": "obsidian" },
+  { "q": "which company hosts the user's website", "expect": "cloudflare" },
+  { "q": "what kind of coffee does the user drink", "expect": "espresso" },
+  { "q": "which terminal emulator is the user's daily driver", "expect": "ghostty" },
+  { "q": "what musical instrument does the user play", "expect": "piano" },
+  { "q": "which basketball team does the user support", "expect": "lakers" },
+  { "q": "when does the user usually wake up", "expect": "six in the morning" }
+]
