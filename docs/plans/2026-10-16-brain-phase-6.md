@@ -196,6 +196,22 @@ persists a cursor in the `meta.json` sidecar; the admin repeats
 - [x] **Step 3: Implement** meta state machine + resume + download/restore guards.
 - [x] **Step 4: Gate + commit** — `fix(export): resumable jobs for free-plan ceilings`.
 
+### Task 8 — CPU ceiling: hoisted KEK + sliced table walk
+
+**Found during live acceptance of T7:** the portable start flaked with CF error
+1102 (free plan = **10 ms CPU/invocation**). Two CPU hot spots: (a)
+`decryptPayload` re-derives the KEK (SHA-256 + importKey) on **every** object;
+(b) the table phase stringifies ~1 MB in one call. Fix: import the KEK once
+per invocation (`payloadKek` + `decryptPayloadWithKek`), walk tables in
+≤400-row slices with a `{table_index, row_offset}` cursor in meta.json, and cap
+the portable payload page at 100 objects.
+
+**Files:** Modify `src/crypto.ts`, `src/exporter.ts`; extend `test/export.test.ts`.
+
+- [ ] **Step 1: Tests** — seed >400 events: first export call ends
+  `state:"running"` with ≤400 event rows in the first part; resume until done;
+  every seeded event present exactly once in the artifact.\n- [ ] **Step 2: Run and watch fail.**\n- [ ] **Step 3: Implement** sliced tables + hoisted KEK + portable page cap.\n- [ ] **Step 4: Gate + commit** — `fix(export): slice tables + hoist KEK for CPU ceiling`.
+
 ## Merge + acceptance (closing — one push)
 
 - [x] Merge `phase-6` → `master`, push (done `71a455d`); CI build `5ad08322…` success.
