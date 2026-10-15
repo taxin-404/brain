@@ -29,3 +29,9 @@ Confirmed proposals: promoted facts become user_stated at 0.9.
 - Input: {"groups":[{"subject","predicate","facts":[{"id","object","confidence","fact_kind","units"}]}]} where units is the count of distinct evidence units behind that fact.
 - Output JSON ONLY: {"merges":[{"survivor_id","victim_id","reason"}],"supersedes":[{"old_id","new_id","reason"}],"conflicts":[{"fact_ids":[...],"reason"}]}
 - Use ONLY ids from the input. A merge must union evidence units (never merge rows that share every unit). Conflicts are reported, never resolved by deletion. No prose, no markdown.`;
+
+export const REFLECTION_PROMPT = `[REFLECTION] Given the period's facts + events: 3-5 durable insights about goals, projects,
+preferences. One sentence each, evidence = fact_ids[]. No new facts, no advice, no filler.
+Never surface \`restricted\` or purged material.
+- Input: {"period","facts":[{"id","subject","predicate","object"}],"events":[{"ts","excerpt"}]}
+- Output JSON ONLY: {"insights":[{"text","fact_ids":[...]}]} — 3-5 items; every fact_id MUST come from the input facts. No prose, no markdown.`;

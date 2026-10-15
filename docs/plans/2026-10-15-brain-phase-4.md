@@ -182,14 +182,14 @@ sweep on `*/30` only; AUDIT actions free-form strings.
 - `handleReflect(request, env): Promise<Response>` — body `{period}`; 400 on
   invalid; 200 run JSON.
 
-- [ ] **Step 1: Tests** — week run stores row + sources + audit; restricted
+- [x] **Step 1: Tests** — week run stores row + sources + audit; restricted
   fact text never in the captured body; invalid fact ids dropped; empty
   window skips **without any gateway call** (handler hit-counter = 0);
   superseded/purged rows excluded; latest 404 then 200 after a run; POST
   admin-only + 400 bad period + month window works.
-- [ ] **Step 2: Run and watch fail.**
-- [ ] **Step 3: Implement** prompt + runner + routes.
-- [ ] **Step 4: Gate + commit** — `feat(reflect): weekly/monthly reflections + latest route`.
+- [x] **Step 2: Run and watch fail.**
+- [x] **Step 3: Implement** prompt + runner + routes.
+- [x] **Step 4: Gate + commit** — `feat(reflect): weekly/monthly reflections + latest route`.
 
 ### Task 4 — cron dispatch
 

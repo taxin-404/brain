@@ -5,6 +5,7 @@ import { healthReport } from "./health";
 import { handleEvents } from "./ingest";
 import { handleExtract } from "./extract";
 import { handleConsolidate } from "./consolidate";
+import { handleReflect, handleReflectionsLatest } from "./reflect";
 import { handleGetFact, handleWhy } from "./facts";
 import { handleGetEntity } from "./graph";
 import { handleMintToken, handlePurge } from "./purge";
@@ -107,6 +108,18 @@ const ROUTES: Array<{ method: string; re: RegExp; need: Need; handler: Handler }
     re: /^\/v1\/consolidate$/,
     need: "admin",
     handler: (_request, env) => handleConsolidate(env),
+  },
+  {
+    method: "GET",
+    re: /^\/v1\/reflections\/latest$/,
+    need: "read",
+    handler: (_request, env) => handleReflectionsLatest(env),
+  },
+  {
+    method: "POST",
+    re: /^\/v1\/reflect$/,
+    need: "admin",
+    handler: (request, env) => handleReflect(request, env),
   },
   {
     method: "GET",
