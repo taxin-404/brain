@@ -5,8 +5,9 @@ search, and recall into future sessions. Runs on Cloudflare Workers (D1 + R2).
 
 **Status: Phase 0 delivered & live · Phase 1 complete** — all 15 planned tasks done
 (48 Worker + 3 plugin tests green, deployed live, acceptance + eval gate passed).
-Capture is proven end-to-end; global plugin registration awaits the owner's go-ahead
-(see `.superpowers/sdd/2026-10-15-brain-phase-0-1/task-14-log.md`).
+Capture and MCP recall are registered globally in the owner's OpenCode config and
+proven live end-to-end (owner-approved 2026-10-15; see
+`.superpowers/sdd/2026-10-15-brain-phase-0-1/task-14-log.md`).
 
 ## Read-first map
 
@@ -89,3 +90,6 @@ live in `vitest.config.ts` miniflare bindings — the suite runs from a fresh cl
   `/tmp/opencode/brain-capture-diag.log` — plugin console output is invisible in
   server logs. Live E2E without touching global config: a project-local
   `opencode.json` with the plugin entry in a scratch dir (see `task-14-log.md`).
+- Registered globally (owner-approved 2026-10-15): the capture plugin and the
+  `brain` MCP server (recall / get_blocks / health_report / remember) live in
+  `~/.config/opencode/opencode.json` — every session captures automatically.
