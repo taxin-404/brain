@@ -31,3 +31,11 @@ Task 3: Ruling: undo of a correction closes the replacement's edge and reopens t
 Task 3: Ruling: purgeFact is idempotent (skips the FTS 'delete' when object_text is already NULL, status flip guarded) — a second forget apply on a deleted fact succeeds as a no-op.
 Task 3: purgeEventCore gained an actor param (default "user"); the apply path passes the proposal actor.
 Task 3: complete (commits 22de655..b526e21, tests: npx vitest run →    Duration  20.78s (transform 3.05s, setup 24.80s, import 3.30s, tests 16.71s, environment 2ms))
+
+Task 4: Ruling: accepted a function-level import cycle proposals.ts↔review.ts (proposals imports applyProposal for the auto-apply hook; review imports createProposal for the REST handlers). Both usages are call-time only, so ESM/esbuild resolve them; the alternative (a third module for handlers) contradicted the plan's file pin — cost if wrong: bundler edge cases on some toolchain (none observed: full gate green).
+Task 4: Ruling: dispute tier is auto iff the fact's sensitivity is 'normal' (same safety carve-out as corrections); evidence actor is not required for disputes. Design says "dispute is always auto", the carve-out is the ledgered deviation — cost if wrong: sensitive disputes need manual approval, which is the safe direction.
+Task 4: Ruling: ReviewError→HTTP mapping: not_found→404, irreversible→409, unsupported→501, all other codes→400. ProposalError (budget) → 429 over_limit / 503 breaker_open, mirroring ingest.
+Task 4: handleFactReview looks up the fact first (404 unknown) and derives proposal sensitivity from the fact row (never from the body).
+Task 4: mcp.ts proposalReply return widened to {created, id, review_mode, applied, error?}; auto-tier applies happen inside createProposal so MCP and REST share one path (audit actor=system, undoable).
+Task 4: test note: proposals.test.ts's status=applied listing assertion relaxed from exact-equality to all-applied + membership — the shared test DB now legitimately holds auto-applied rows created by the new tests.
+Task 4: complete (commits 566663e..40cf4ad, tests: npx vitest run →    Duration  24.15s (transform 2.89s, setup 29.94s, import 3.56s, tests 17.79s, environment 6ms))
