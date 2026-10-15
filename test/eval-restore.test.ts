@@ -184,3 +184,52 @@ describe("eval: clean-account restore (done-when)", () => {
     expect((await res.json<{ error: string }>()).error).toBe("bad_request");
   });
 });
+
+describe("eval: sliced restore (free-plan subrequest ceiling)", () => {
+  it("restores payloads in bounded slices and audits exactly once", async () => {
+    const ids: string[] = [];
+    for (let i = 0; i < 3; i += 1) {
+      const ingested = await ingestEvents(env, "ADMIN", [
+        { source: "manual", actor: "user", kind: "note", excerpt: `slice ${i}`, payload: { i } },
+      ]);
+      ids.push(ingested.results[0].id);
+    }
+
+    const exp = await call("GET", "/v1/export?profile=backup", undefined, bearer(env, "ADMIN"));
+    const { job } = await exp.json<{ job: string }>();
+
+    // One payload file contains 4 objects by now (1 seeded earlier + 3 here);
+    // limit=2 forces two calls.
+    const first = await call("POST", "/v1/restore", { job, limit: 2 }, bearer(env, "ADMIN"));
+    expect(first.status).toBe(200);
+    const b1 = await first.json<{ done: boolean; r2_payloads: number; fts_rows: number | null }>();
+    expect(b1.done).toBe(false);
+    expect(b1.r2_payloads).toBe(2);
+    expect(b1.fts_rows).toBeNull();
+
+    const second = await call("POST", "/v1/restore", { job, limit: 2 }, bearer(env, "ADMIN"));
+    const b2 = await second.json<{ done: boolean; r2_payloads: number; fts_rows: number }>();
+    expect(b2.done).toBe(true);
+    expect(b2.r2_payloads).toBe(2);
+    expect(b2.fts_rows).toBeGreaterThan(0);
+
+    // Every original payload object exists in R2 again.
+    for (const id of ids) {
+      expect(await env.BRAIN_RAW.get(`payloads/${id}`)).toBeTruthy();
+    }
+
+    // Audit exactly once, on the completing call.
+    const audit = await env.BRAIN_DB.prepare(
+      `SELECT count(*) AS n FROM audit_log WHERE action = 'restore' AND target_id = ?1`,
+    )
+      .bind(job)
+      .first<{ n: number }>();
+    expect(audit?.n).toBe(1);
+
+    // Completed restore calls are cached no-ops.
+    const third = await call("POST", "/v1/restore", { job, limit: 2 }, bearer(env, "ADMIN"));
+    const b3 = await third.json<{ done: boolean; cached: boolean }>();
+    expect(b3.done).toBe(true);
+    expect(b3.cached).toBe(true);
+  });
+});

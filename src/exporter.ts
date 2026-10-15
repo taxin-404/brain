@@ -38,17 +38,88 @@ export const EXPORT_TTL_MS = 15 * 60_000;
 const CHUNK_ROWS = 500;
 const PART_BYTES = 4 * 1024 * 1024;
 
-export interface ExportResult {
+/** Payload objects walked per invocation. The Workers Free plan allows only
+ *  1,000 Cloudflare-service subrequests per invocation, so the walk is paged:
+ *  one bounded R2 list page per call with the cursor persisted in meta.json
+ *  (`state:"running"` → resume via `GET /v1/export?job=…` until `done:true`). */
+const DEFAULT_EXPORT_SLICE = 200;
+export const MAX_EXPORT_SLICE = 500;
+const DEFAULT_RESTORE_SLICE = 800;
+export const MAX_RESTORE_SLICE = 1200;
+
+export interface ExportJobView {
   job: string;
   profile: "backup" | "portable";
+  state: "running" | "done";
+  done: boolean;
+  parts: number;
   url: string;
   expires_at: number;
+}
+
+interface ExportMeta {
+  profile: "backup" | "portable";
+  exp: number;
+  exported_at: number;
+  state: "running" | "done";
+  cursor: string | null;
+  seq: number;
   parts: number;
+  tables: boolean;
+}
+
+interface RestoreState {
+  tables_done: boolean;
+  restored_tables: Record<string, number>;
+  payload_index: number;
+  done: boolean;
+  fts_rows: number | null;
 }
 
 const partKey = (job: string, seq: number) => `exports/${job}/${String(seq).padStart(3, "0")}.ndjson`;
 const metaKey = (job: string) => `exports/${job}/meta.json`;
+const restoreStateKey = (job: string) => `exports/${job}/restore-state.json`;
 const PART_RE = /\/\d{3}\.ndjson$/;
+
+const clampSlice = (n: number | undefined, max: number, dflt: number): number =>
+  n !== undefined && Number.isFinite(n) && n >= 1 ? Math.min(Math.trunc(n), max) : dflt;
+
+/** Reads the meta sidecar. Legacy (pre-resume) metas were written only at
+ *  completion and carry no `state` — they normalize to `done`. */
+const readMeta = async (env: Env, job: string): Promise<ExportMeta | null> => {
+  const obj = await env.BRAIN_RAW.get(metaKey(job));
+  if (!obj) return null;
+  try {
+    const m = (await obj.json()) as Partial<ExportMeta>;
+    if (m.profile !== "backup" && m.profile !== "portable") return null;
+    if (!Number.isFinite(m.exp)) return null;
+    return {
+      profile: m.profile,
+      exp: m.exp as number,
+      exported_at: typeof m.exported_at === "number" ? m.exported_at : 0,
+      state: m.state === "running" ? "running" : "done",
+      cursor: typeof m.cursor === "string" ? m.cursor : null,
+      seq: typeof m.seq === "number" ? m.seq : typeof m.parts === "number" ? m.parts : 0,
+      parts: typeof m.parts === "number" ? m.parts : 0,
+      tables: m.tables !== false,
+    };
+  } catch {
+    return null;
+  }
+};
+
+const exportView = async (env: Env, job: string, meta: ExportMeta): Promise<ExportJobView> => {
+  const token = await exportLinkToken(env.CONTENT_HMAC_KEY, job, meta.exp);
+  return {
+    job,
+    profile: meta.profile,
+    state: meta.state,
+    done: meta.state === "done",
+    parts: meta.parts,
+    url: `/v1/export/${job}/download?exp=${meta.exp}&token=${token}`,
+    expires_at: meta.exp,
+  };
+};
 
 const b64encode = (buf: ArrayBuffer): string => {
   const bytes = new Uint8Array(buf);
@@ -94,20 +165,47 @@ async function insertRows(env: Env, table: string, rows: Array<Record<string, un
   return stmts.length;
 }
 
-export async function restoreFromJob(env: Env, job: string): Promise<{ status: number; body: unknown }> {
+export async function restoreFromJob(
+  env: Env,
+  job: string,
+  opts: { limit?: number } = {},
+): Promise<{ status: number; body: unknown }> {
+  const slice = clampSlice(opts.limit, MAX_RESTORE_SLICE, DEFAULT_RESTORE_SLICE);
   const metaObj = await env.BRAIN_RAW.get(metaKey(job));
   if (!metaObj) return { status: 404, body: { error: "not_found" } };
-  const meta = (await metaObj.json()) as { profile?: string };
+  const meta = (await metaObj.json()) as { profile?: string; state?: string };
   if (meta.profile !== "backup") {
     return { status: 400, body: { error: "bad_request", message: "restore requires a backup-profile export" } };
   }
+  if (meta.state === "running") {
+    return { status: 409, body: { error: "in_progress", message: "export is still running; resume it first" } };
+  }
+
+  // Restore progress lives in a sidecar inside the job prefix (download
+  // filters part keys, the sweep deletes the whole prefix).
+  let state: RestoreState | null = null;
+  const stateObj = await env.BRAIN_RAW.get(restoreStateKey(job));
+  if (stateObj) {
+    try {
+      state = (await stateObj.json()) as RestoreState;
+    } catch {
+      state = null;
+    }
+  }
+  if (state?.done) {
+    return {
+      status: 200,
+      body: { job, done: true, restored: {}, r2_payloads: 0, fts_rows: state.fts_rows, cached: true },
+    };
+  }
+  if (!state) state = { tables_done: false, restored_tables: {}, payload_index: 0, done: false, fts_rows: null };
 
   const parts = (await env.BRAIN_RAW.list({ prefix: `exports/${job}/` })).objects
     .filter((o) => PART_RE.test(o.key))
     .sort((a, b) => a.key.localeCompare(b.key));
   if (parts.length === 0) return { status: 404, body: { error: "not_found" } };
 
-  const restored: Record<string, number> = {};
+  const restored: Record<string, number> = {}; // table counts from this call only
   const payloads: Array<{ key: string; b64: string }> = [];
   let headerOk = false;
 
@@ -140,38 +238,59 @@ export async function restoreFromJob(env: Env, job: string): Promise<{ status: n
       // Unknown content tables are ignored (forward-compatible exports).
       if (!(EXPORT_TABLES as readonly string[]).includes(item.table)) continue;
       if (item.rows.length === 0) continue;
-      const n = await insertRows(env, item.table, item.rows);
-      restored[item.table] = (restored[item.table] ?? 0) + n;
+      if (!state.tables_done) {
+        const n = await insertRows(env, item.table, item.rows);
+        restored[item.table] = (restored[item.table] ?? 0) + n;
+      }
     }
   }
 
+  if (!state.tables_done) {
+    state.tables_done = true;
+    state.restored_tables = { ...restored };
+  }
+
+  // Payload re-puts are the subrequest-heavy step: bounded per call, resumable
+  // by index. `payloads/` prefix guard is belt & braces.
   let r2_payloads = 0;
-  for (const p of payloads) {
-    if (!p.key.startsWith("payloads/")) continue; // belt & braces: payload prefix only
+  const to = Math.min(payloads.length, state.payload_index + slice);
+  for (let i = state.payload_index; i < to; i += 1) {
+    const p = payloads[i];
+    if (!p.key.startsWith("payloads/")) continue;
     await env.BRAIN_RAW.put(p.key, b64decode(p.b64));
     r2_payloads += 1;
   }
+  state.payload_index = to;
 
-  const { fts_rows } = await rebuildProjections(env);
+  if (!state.done && state.payload_index >= payloads.length) {
+    state.done = true;
+    const { fts_rows } = await rebuildProjections(env);
+    state.fts_rows = fts_rows;
+    await writeAudit(env.BRAIN_DB, {
+      actor: "user",
+      action: "restore",
+      targetType: "export",
+      targetId: job,
+      after: { restored: state.restored_tables, r2_payloads: payloads.length, fts_rows },
+      reason: "",
+    });
+  }
 
-  await writeAudit(env.BRAIN_DB, {
-    actor: "user",
-    action: "restore",
-    targetType: "export",
-    targetId: job,
-    after: { restored, r2_payloads, fts_rows },
-    reason: "",
-  });
+  await env.BRAIN_RAW.put(restoreStateKey(job), JSON.stringify(state));
 
-  return { status: 200, body: { job, restored, r2_payloads, fts_rows } };
+  return {
+    status: 200,
+    body: { job, done: state.done, restored, r2_payloads, fts_rows: state.done ? state.fts_rows : null },
+  };
 }
 
 export async function handleRestore(request: Request, env: Env): Promise<Response> {
-  const body = (await request.json().catch(() => null)) as { job?: unknown } | null;
+  const body = (await request.json().catch(() => null)) as { job?: unknown; limit?: unknown } | null;
   if (!body || typeof body.job !== "string" || !/^[A-Za-z0-9_-]{1,64}$/.test(body.job)) {
     return json({ error: "bad_request", message: "job required" }, 400);
   }
-  const out = await restoreFromJob(env, body.job);
+  const limit = typeof body.limit === "number" ? body.limit : undefined;
+  const out = await restoreFromJob(env, body.job, { limit });
   return json(out.body, out.status);
 }
 
@@ -193,24 +312,19 @@ const constantTimeEqual = (a: string, b: string): boolean => {
   return diff === 0;
 };
 
-export async function runExport(
-  env: Env,
-  profile: "backup" | "portable",
-  now = Date.now(),
-): Promise<ExportResult> {
-  const job = newEventId();
-  const exp = now + EXPORT_TTL_MS;
-  const meta = { profile, exp: String(exp) };
+/** One bounded slice of the walk: (first call) header + content tables, then
+ *  one R2 list page of payload objects. Cursor + seq persist in meta.json. */
+async function exportSlice(env: Env, job: string, meta: ExportMeta, slice: number): Promise<ExportMeta> {
+  const profile = meta.profile;
   // Portable artifacts are decrypted on the walk and ship no wrapped keys.
   const tables = profile === "backup" ? EXPORT_TABLES : EXPORT_TABLES.filter((t) => t !== "event_keys");
-  const wrappedKeys = profile === "portable" ? await loadWrappedKeys(env) : null;
 
   let buf: string[] = [];
   let size = 0;
-  let seq = 0;
+  let seq = meta.seq;
   const flush = async () => {
     if (buf.length === 0) return;
-    await env.BRAIN_RAW.put(partKey(job, seq), buf.join("\n") + "\n", { customMetadata: meta });
+    await env.BRAIN_RAW.put(partKey(job, seq), buf.join("\n") + "\n");
     seq += 1;
     buf = [];
     size = 0;
@@ -221,76 +335,121 @@ export async function runExport(
     if (size >= PART_BYTES) await flush();
   };
 
-  await line(
-    JSON.stringify({
-      kind: "header",
-      format: "brain-export",
-      version: 1,
-      profile,
-      exported_at: now,
-      tables: [...tables, "r2_payloads"],
-    }),
-  );
-
-  for (const table of tables) {
-    const { results } = await env.BRAIN_DB.prepare(`SELECT * FROM ${table}`).all();
-    for (let i = 0; i < results.length; i += CHUNK_ROWS) {
-      await line(JSON.stringify({ table, rows: results.slice(i, i + CHUNK_ROWS) }));
+  if (!meta.tables) {
+    await line(
+      JSON.stringify({
+        kind: "header",
+        format: "brain-export",
+        version: 1,
+        profile,
+        exported_at: meta.exported_at,
+        tables: [...tables, "r2_payloads"],
+      }),
+    );
+    for (const table of tables) {
+      const { results } = await env.BRAIN_DB.prepare(`SELECT * FROM ${table}`).all();
+      for (let i = 0; i < results.length; i += CHUNK_ROWS) {
+        await line(JSON.stringify({ table, rows: results.slice(i, i + CHUNK_ROWS) }));
+      }
     }
   }
 
-  // Raw payload objects (R2). Backup ships ciphertext; portable decrypts.
-  let cursor: string | undefined;
-  do {
-    const list = await env.BRAIN_RAW.list({ prefix: "payloads/", cursor, limit: 500 });
-    for (const obj of list.objects) {
-      const body = await env.BRAIN_RAW.get(obj.key);
-      if (!body) continue;
-      const blob = await body.arrayBuffer();
-      if (profile === "backup") {
-        await line(JSON.stringify({ table: "r2_payloads", rows: [{ key: obj.key, b64: b64encode(blob) }] }));
-      } else {
-        // Decrypt with the KEK + this event's wrapped key; orphans stay null.
-        let text: string | null = null;
-        const eventId = obj.key.slice("payloads/".length);
-        const wrappedKey = wrappedKeys?.get(eventId);
-        if (wrappedKey) {
-          try {
-            text = await decryptPayload(env.PAYLOAD_KEK, wrappedKey, blob);
-          } catch {
-            text = null;
-          }
+  // Raw payload objects (R2): one bounded page per invocation. Backup ships
+  // ciphertext; portable decrypts with the KEK + wrapped key per event.
+  const list = await env.BRAIN_RAW.list({ prefix: "payloads/", cursor: meta.cursor ?? undefined, limit: slice });
+  const wrappedKeys = profile === "portable" && list.objects.length > 0 ? await loadWrappedKeys(env) : null;
+  for (const obj of list.objects) {
+    const body = await env.BRAIN_RAW.get(obj.key);
+    if (!body) continue;
+    const blob = await body.arrayBuffer();
+    if (profile === "backup") {
+      await line(JSON.stringify({ table: "r2_payloads", rows: [{ key: obj.key, b64: b64encode(blob) }] }));
+    } else {
+      // Orphan blobs (no wrapped key) and decrypt failures degrade to null.
+      let text: string | null = null;
+      const eventId = obj.key.slice("payloads/".length);
+      const wrappedKey = wrappedKeys?.get(eventId);
+      if (wrappedKey) {
+        try {
+          text = await decryptPayload(env.PAYLOAD_KEK, wrappedKey, blob);
+        } catch {
+          text = null;
         }
-        await line(JSON.stringify({ table: "r2_payloads", rows: [{ key: obj.key, text }] }));
       }
+      await line(JSON.stringify({ table: "r2_payloads", rows: [{ key: obj.key, text }] }));
     }
-    cursor = list.truncated ? list.cursor : undefined;
-  } while (cursor);
+  }
   await flush();
 
-  // Sidecar manifest (profile + retention) — the download and sweep read this
-  // instead of relying on R2 custom metadata (invisible to `list()` locally).
-  await env.BRAIN_RAW.put(
-    metaKey(job),
-    JSON.stringify({ profile, exp, exported_at: now, parts: seq }),
-    { customMetadata: meta },
-  );
+  const cursor = list.truncated ? (list.cursor ?? null) : null;
+  const next: ExportMeta = {
+    ...meta,
+    tables: true,
+    cursor,
+    seq,
+    parts: seq,
+    state: cursor === null ? "done" : "running",
+  };
+  await env.BRAIN_RAW.put(metaKey(job), JSON.stringify(next));
 
-  await writeAudit(env.BRAIN_DB, {
-    actor: "user",
-    action: "export",
-    targetType: "export",
-    targetId: job,
-    after: { profile, exp },
-    reason: "",
-  });
+  if (next.state === "done") {
+    await writeAudit(env.BRAIN_DB, {
+      actor: "user",
+      action: "export",
+      targetType: "export",
+      targetId: job,
+      after: { profile, exp: meta.exp, parts: seq },
+      reason: "",
+    });
+  }
+  return next;
+}
 
-  const token = await exportLinkToken(env.CONTENT_HMAC_KEY, job, exp);
-  return { job, profile, url: `/v1/export/${job}/download?exp=${exp}&token=${token}`, expires_at: exp, parts: seq };
+export async function startExport(
+  env: Env,
+  profile: "backup" | "portable",
+  opts: { limit?: number } = {},
+  now = Date.now(),
+): Promise<{ status: number; body: unknown }> {
+  const job = newEventId();
+  const meta: ExportMeta = {
+    profile,
+    exp: now + EXPORT_TTL_MS,
+    exported_at: now,
+    state: "running",
+    cursor: null,
+    seq: 0,
+    parts: 0,
+    tables: false,
+  };
+  const next = await exportSlice(env, job, meta, clampSlice(opts.limit, MAX_EXPORT_SLICE, DEFAULT_EXPORT_SLICE));
+  return { status: 200, body: await exportView(env, job, next) };
+}
+
+export async function resumeExport(
+  env: Env,
+  job: string,
+  opts: { limit?: number } = {},
+): Promise<{ status: number; body: unknown }> {
+  const meta = await readMeta(env, job);
+  if (!meta) return { status: 404, body: { error: "not_found" } };
+  if (meta.state === "done") return { status: 200, body: await exportView(env, job, meta) };
+  const next = await exportSlice(env, job, meta, clampSlice(opts.limit, MAX_EXPORT_SLICE, DEFAULT_EXPORT_SLICE));
+  return { status: 200, body: await exportView(env, job, next) };
 }
 
 export async function handleExportRequest(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
+  const limitRaw = Number(url.searchParams.get("limit"));
+  const limit = Number.isFinite(limitRaw) && limitRaw >= 1 ? limitRaw : undefined;
+
+  const jobParam = url.searchParams.get("job");
+  if (jobParam !== null) {
+    if (!/^[A-Za-z0-9_-]{1,64}$/.test(jobParam)) return json({ error: "bad_request" }, 400);
+    const out = await resumeExport(env, jobParam, { limit });
+    return json(out.body, out.status);
+  }
+
   const profile = url.searchParams.get("profile") ?? "backup";
   if (profile !== "backup" && profile !== "portable") {
     return json({ error: "bad_request", message: "profile must be backup|portable" }, 400);
@@ -307,7 +466,8 @@ export async function handleExportRequest(request: Request, env: Env): Promise<R
       throw err;
     }
   }
-  return json(await runExport(env, profile));
+  const out = await startExport(env, profile, { limit });
+  return json(out.body, out.status);
 }
 
 export async function handleExportDownload(env: Env, job: string, url: URL): Promise<Response> {
@@ -319,7 +479,10 @@ export async function handleExportDownload(env: Env, job: string, url: URL): Pro
 
   const metaObj = await env.BRAIN_RAW.get(metaKey(job));
   if (!metaObj) return json({ error: "not_found" }, 404);
-  const meta = (await metaObj.json()) as { profile?: string };
+  const meta = (await metaObj.json()) as { profile?: string; state?: string };
+  if (meta.state === "running") {
+    return json({ error: "in_progress", message: "export is still running; resume via GET /v1/export?job=" }, 409);
+  }
   const profile = meta.profile ?? "backup";
 
   const list = await env.BRAIN_RAW.list({ prefix: `exports/${job}/` });

@@ -188,3 +188,65 @@ describe("export — portable profile + retention", () => {
     expect((await env.BRAIN_RAW.list({ prefix: "exports/newjob000/" })).objects.length).toBe(2);
   });
 });
+
+describe("export — resumable jobs (free-plan subrequest ceiling)", () => {
+  // The Workers Free plan caps Cloudflare-service subrequests per invocation
+  // (1,000). Prod has ~1.3k payload objects, so the walk must page across
+  // invocations: one bounded R2 list page per call, cursor persisted in
+  // meta.json; the admin repeats `GET /v1/export?job=…` until `done:true`.
+  it("walks in slices, resumes with ?job=, refuses download while running", async () => {
+    const ids: string[] = [];
+    for (let i = 0; i < 5; i += 1) ids.push(await seedEvent(`resume ${i}`, { i }));
+
+    const first = await call("GET", "/v1/export?profile=backup&limit=2", undefined, bearer(env, "ADMIN"));
+    expect(first.status).toBe(200);
+    const b1 = await first.json<{ job: string; state: string; done: boolean; url: string; parts: number }>();
+    expect(b1.state).toBe("running");
+    expect(b1.done).toBe(false);
+
+    // A running job's link answers 409 — never a partial artifact.
+    expect((await call("GET", b1.url)).status).toBe(409);
+    // Restore of a running job refuses too.
+    expect((await call("POST", "/v1/restore", { job: b1.job }, bearer(env, "ADMIN"))).status).toBe(409);
+
+    let view = b1;
+    let calls = 1;
+    for (let i = 0; i < 40 && !view.done; i += 1) {
+      const res = await call("GET", `/v1/export?job=${b1.job}&limit=2`, undefined, bearer(env, "ADMIN"));
+      expect(res.status).toBe(200);
+      view = await res.json();
+      calls += 1;
+    }
+    expect(view.done).toBe(true);
+    expect(calls).toBeGreaterThan(1);
+
+    // Finished artifact: exactly one header, every payload key exactly once.
+    const dl = await call("GET", b1.url);
+    expect(dl.status).toBe(200);
+    const lines = (await dl.text())
+      .split("\n")
+      .filter(Boolean)
+      .map((l) => JSON.parse(l) as Record<string, unknown>);
+    expect(lines.filter((l) => l.kind === "header").length).toBe(1);
+    const rows = lines
+      .filter((l) => l.table === "r2_payloads")
+      .flatMap((l) => l.rows as Array<{ key: string }>);
+    const counts = new Map<string, number>();
+    for (const r of rows) counts.set(r.key, (counts.get(r.key) ?? 0) + 1);
+    for (const n of counts.values()) expect(n).toBe(1);
+    for (const id of ids) expect(counts.get(`payloads/${id}`)).toBe(1);
+
+    // Resuming a finished job is a no-op.
+    const again = await call("GET", `/v1/export?job=${b1.job}`, undefined, bearer(env, "ADMIN"));
+    const b4 = await again.json<{ done: boolean; parts: number }>();
+    expect(b4.done).toBe(true);
+    expect(b4.parts).toBe(view.parts);
+  });
+
+  it("validates ?job= and keeps portable gated on start", async () => {
+    expect((await call("GET", "/v1/export?job=..%2Fetc", undefined, bearer(env, "ADMIN"))).status).toBe(400);
+    expect((await call("GET", "/v1/export?job=doesnotexist", undefined, bearer(env, "ADMIN"))).status).toBe(404);
+    // Resuming needs no new confirm token; starting portable still does.
+    expect((await call("GET", "/v1/export?profile=portable", undefined, bearer(env, "ADMIN"))).status).toBe(403);
+  });
+});

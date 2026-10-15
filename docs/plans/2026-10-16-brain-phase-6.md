@@ -188,13 +188,13 @@ persists a cursor in the `meta.json` sidecar; the admin repeats
 **Files:** Modify `src/exporter.ts`; extend `test/export.test.ts`,
 `test/eval-restore.test.ts`.
 
-- [ ] **Step 1: Tests** — export with `limit=2`: first call `state:"running"`,
+- [x] **Step 1: Tests** — export with `limit=2`: first call `state:"running"`,
   download 409s while running, resume with `?job=` until done; final artifact
   has one header and every payload key exactly once; restore with `limit=2`
   slices payload re-puts (`done:false` → `done:true`), one audit row.
-- [ ] **Step 2: Run and watch fail.**
-- [ ] **Step 3: Implement** meta state machine + resume + download/restore guards.
-- [ ] **Step 4: Gate + commit** — `fix(export): resumable jobs for free-plan ceilings`.
+- [x] **Step 2: Run and watch fail.**
+- [x] **Step 3: Implement** meta state machine + resume + download/restore guards.
+- [x] **Step 4: Gate + commit** — `fix(export): resumable jobs for free-plan ceilings`.
 
 ## Merge + acceptance (closing — one push)
 
