@@ -14,6 +14,7 @@ import { handleGetBlocks, handlePutBlock } from "./blocks";
 import { handleMcp } from "./mcp";
 import { handleListProposals } from "./proposals";
 import { handleGithubSync } from "./connector-github";
+import { handleExportDownload, handleExportRequest } from "./exporter";
 import { handleApproveProcedure, handleGetProcedure, handleListProcedures } from "./procedures";
 import { handleFactReview, handleProposalReview } from "./review";
 import { runSweep } from "./sweep";
@@ -137,6 +138,18 @@ const ROUTES: Array<{ method: string; re: RegExp; need: Need; handler: Handler }
   },
   {
     method: "GET",
+    re: /^\/v1\/export$/,
+    need: "admin",
+    handler: (request, env) => handleExportRequest(request, env),
+  },
+  {
+    method: "GET",
+    re: /^\/v1\/export\/([A-Za-z0-9_-]+)\/download$/,
+    need: "link",
+    handler: (request, env, _scope, _ctx, match) => handleExportDownload(env, match[1], new URL(request.url)),
+  },
+  {
+    method: "GET",
     re: /^\/v1\/reflections\/latest$/,
     need: "read",
     handler: (_request, env) => handleReflectionsLatest(env),
@@ -199,6 +212,9 @@ export default {
       if (route.method !== request.method) continue;
       const match = route.re.exec(pathname);
       if (!match) continue;
+      // `link` routes authenticate via their own HMAC-signed URL parameters
+      // (short-TTL export downloads); the scope slot is a placeholder.
+      if (route.need === "link") return route.handler(request, env, "MCP_READ", ctx, match);
       const denied = requireScope(request, env, route.need);
       if (denied) return denied;
       const scope = resolveScope(request, env);

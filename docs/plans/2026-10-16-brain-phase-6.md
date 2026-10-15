@@ -116,13 +116,13 @@ Spec anchors that pin the behavior:
 **Files:** Create `src/exporter.ts`; modify `src/index.ts`; create
 `test/export.test.ts`.
 
-- [ ] **Step 1: Tests** — backup job writes NDJSON to R2 (header + table
+- [x] **Step 1: Tests** — backup job writes NDJSON to R2 (header + table
   chunks; payload blobs stay encrypted; `event_keys` present); download with
   a valid link returns the file; tampered/expired token 403; audit row
   present; ADMIN-only; artifact round-trips as parseable NDJSON.
-- [ ] **Step 2: Run and watch fail.**
-- [ ] **Step 3: Implement** walk + R2 put + link + download route.
-- [ ] **Step 4: Gate + commit** — `feat(export): backup profile + signed links`.
+- [x] **Step 2: Run and watch fail.**
+- [x] **Step 3: Implement** walk + R2 put + link + download route.
+- [x] **Step 4: Gate + commit** — `feat(export): backup profile + signed links`.
 
 ### Task 3 — portable profile + retention
 
