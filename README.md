@@ -152,6 +152,35 @@ consolidation pass, and weekly/monthly reflections.
   health both green. Full evidence in the
   [Phase 4 plan](docs/plans/2026-10-15-brain-phase-4.md) closing section.
 
+## Phase 5 (procedural)
+
+Repeated workflows move from "the agent noticed a pattern" to an approved,
+versioned procedure — and only a human can flip the approval switch.
+
+- **Flow:** `propose_procedure` (MCP, propose scope) lands a `procedure`
+  proposal that is **always manual**; `POST /v1/proposals/:id/apply` (ADMIN)
+  promotes it into `procedures` as **draft v1** plus a `procedure_versions`
+  row; `POST /v1/procedures/:id/approve` (ADMIN) is the only path to
+  `approved`. The approve route is **not** an MCP tool — agent tokens get
+  403, so the agent cannot self-approve.
+- **Trust on origin:** proposals may cite `evidence_event_id`; an
+  `actor=external` evidence event is a hard refuse at apply
+  (`400 untrusted_origin`, nothing written), and evidence-based promotions
+  carry `origin_trust` = the event's trust. No evidence → neutral 0.5.
+- **Versioning:** `procedure_id` targets an existing procedure (otherwise a
+  normalized name match); applying lands version N+1, keeping every prior
+  version intact. **Any new version flips an approved procedure back to
+  draft** — every version needs its own approval. Deprecated procedures
+  refuse new versions. Promotion has no undo (manual tier; versions are
+  append-only history).
+- **Routes:** `POST /v1/procedures/:id/approve` (admin), `GET /v1/procedures`
+  and `GET /v1/procedures/:id` (read; detail returns the full newest-first
+  version history).
+- **Eval:** `test/eval-procedure.test.ts` runs the §8 done-when end to end:
+  MCP propose → 403 for agent tokens on apply/approve → ADMIN apply → ADMIN
+  approve → approved procedure; refinement → re-approval gate; poisoned
+  external origin dies with zero rows.
+
 ## Read-first map
 
 | Doc | What it is |
@@ -161,10 +190,12 @@ consolidation pass, and weekly/monthly reflections.
 | [`docs/plans/2026-10-15-brain-phase-2.md`](docs/plans/2026-10-15-brain-phase-2.md) | Phase 2 plan — semantic layer (extraction, embeddings, search blend) |
 | [`docs/plans/2026-10-15-brain-phase-3.md`](docs/plans/2026-10-15-brain-phase-3.md) | Phase 3 plan — review engine, why/entity views, contradictions |
 | [`docs/plans/2026-10-15-brain-phase-4.md`](docs/plans/2026-10-15-brain-phase-4.md) | Phase 4 plan — crons, consolidation, reflections, health |
+| [`docs/plans/2026-10-16-brain-phase-5.md`](docs/plans/2026-10-16-brain-phase-5.md) | Phase 5 plan — procedures, versioning, approval gate |
 | [`.superpowers/sdd/2026-10-15-brain-phase-0-1/progress.md`](.superpowers/sdd/2026-10-15-brain-phase-0-1/progress.md) | Running ledger — rulings, gotchas, environment facts. **Read before changing anything.** |
 | [`.superpowers/sdd/2026-10-15-brain-phase-2/progress.md`](.superpowers/sdd/2026-10-15-brain-phase-2/progress.md) | Phase 2 ledger — rulings + gotchas |
 | [`.superpowers/sdd/2026-10-15-brain-phase-3/progress.md`](.superpowers/sdd/2026-10-15-brain-phase-3/progress.md) | Phase 3 ledger — rulings + gotchas |
 | [`.superpowers/sdd/2026-10-15-brain-phase-4/progress.md`](.superpowers/sdd/2026-10-15-brain-phase-4/progress.md) | Phase 4 ledger — rulings + gotchas |
+| [`.superpowers/sdd/2026-10-16-brain-phase-5/progress.md`](.superpowers/sdd/2026-10-16-brain-phase-5/progress.md) | Phase 5 ledger — rulings + gotchas |
 | `.superpowers/sdd/2026-10-15-brain-phase-0-1/task-N-brief.md` | Per-task briefs (interfaces, verbatim tests) |
 | [`docs/key-rotation.md`](docs/key-rotation.md) | PAYLOAD_KEK rotation procedure |
 
@@ -173,7 +204,8 @@ consolidation pass, and weekly/monthly reflections.
 ```
 src/            Worker source — routes, auth, crypto, redact, budget, ingest,
                 purge, audit, rebuild (FTS5), search, blocks, mcp, sweep,
-                extract, factstore, graph, review, consolidate, reflect, health
+                extract, factstore, graph, review, consolidate, reflect,
+                procedures, health
 migrations/     D1 schema 0001–0005 (wrangler d1 migrations apply)
 test/           vitest suite (@cloudflare/vitest-plugin, D1 via miniflare)
 plugin/         OpenCode capture plugin — event-sourced capture + diagnostics (Tasks 13–14)
@@ -269,6 +301,7 @@ builds.
 | — | Phase 2: semantic layer (extraction, embeddings, hybrid search) | ✅ |
 | — | Phase 3: review engine, why/entity views, deterministic contradictions | ✅ |
 | — | Phase 4: crons, consolidation, reflections, health | ✅ |
+| — | Phase 5: procedures — versioning + human approval gate | ✅ |
 
 ## For AI agents
 

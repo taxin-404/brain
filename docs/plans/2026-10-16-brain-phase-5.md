@@ -152,11 +152,11 @@ status, current_version, origin_trust, last_success_at, created_at}]}`;
 **Files:** Modify `README.md`; ledger close-out; mirror plan to
 `/home/taxin/Work/docs/superpowers/plans/`.
 
-- [ ] **Step 1: Full gate** — `npx vitest run` + `npx tsc --noEmit`.
-- [ ] **Step 2: README** Phase 5 section (proposal → apply → approve, trust
+- [x] **Step 1: Full gate** — `npx vitest run` + `npx tsc --noEmit`.
+- [x] **Step 2: README** Phase 5 section (proposal → apply → approve, trust
   rules, versioning, routes) + status line.
-- [ ] **Step 3: Tick every box; ledger close-out; mirror.**
-- [ ] **Step 4: Commit** — `docs: close phase 5 (procedures + approval gate)`.
+- [x] **Step 3: Tick every box; ledger close-out; mirror.**
+- [x] **Step 4: Commit** — `docs: close phase 5 (procedures + approval gate)`.
 
 ## Merge + acceptance (closing — one push)
 
