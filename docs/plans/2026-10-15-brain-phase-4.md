@@ -246,10 +246,10 @@ sweep on `*/30` only; AUDIT actions free-form strings.
   restricted text absent from the captured prompt, vector store size strictly
   decreases (pruning), run report JSON fields present.
 
-- [ ] **Step 1: Write the eval; run and watch fail.**
-- [ ] **Step 2: Implement** only what the eval exposes (should be nothing —
+- [x] **Step 1: Write the eval; run and watch fail.**
+- [x] **Step 2: Implement** only what the eval exposes (should be nothing —
   it pins Tasks 1–2 behavior; if it fails, fix honestly).
-- [ ] **Step 3: Gate + commit** — `test(eval): consolidation mini-eval (tombstones, pruning)`.
+- [x] **Step 3: Gate + commit** — `test(eval): consolidation mini-eval (tombstones, pruning)`.
 
 ### Task 7 — docs + close-out
 
