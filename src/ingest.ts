@@ -140,6 +140,7 @@ export async function ingestEvents(env: Env, scope: Scope, entries: EventInput[]
     results.push({ id: p.id, status: "stored" });
   }
 
+  let stored = 0;
   if (prepared.length > 0) {
     const verdict = await charge(env.BRAIN_DB, scope, prepared.length);
     if (verdict === "over_limit") throw new IngestError("over_limit", "daily propose cap reached");
@@ -150,23 +151,36 @@ export async function ingestEvents(env: Env, scope: Scope, entries: EventInput[]
     for (const p of prepared) {
       stmts.push(
         env.BRAIN_DB.prepare(
-          `INSERT INTO events (id, ts, ingested_at, source, actor, trust, session_id, kind, privacy, excerpt, content_hmac)
+          `INSERT OR IGNORE INTO events (id, ts, ingested_at, source, actor, trust, session_id, kind, privacy, excerpt, content_hmac)
            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)`,
         ).bind(p.id, p.ts, now, p.source, p.actor, p.trust, p.sessionId, p.kind, p.privacy, p.excerpt, p.hmac),
       );
       stmts.push(
-        env.BRAIN_DB.prepare(`INSERT INTO event_keys (event_id, wrapped_key, created_at) VALUES (?1, ?2, ?3)`).bind(
-          p.id,
-          p.wrappedKey,
-          now,
-        ),
+        env.BRAIN_DB.prepare(
+          `INSERT OR IGNORE INTO event_keys (event_id, wrapped_key, created_at) VALUES (?1, ?2, ?3)`,
+        ).bind(p.id, p.wrappedKey, now),
       );
     }
-    await env.BRAIN_DB.batch(stmts);
+    const batchResults = await env.BRAIN_DB.batch(stmts);
+    // INSERT OR IGNORE keeps concurrent duplicate submissions from throwing: the
+    // pre-insert SELECT above cannot see a writer that has not committed yet, so
+    // two racing batches may both reach the INSERT. `meta.changes` says which
+    // inserts actually landed; raced rows report "duplicate" exactly like the
+    // sequential dedupe path. Budget was charged on the pre-race count (p.length).
+    const resultIndex = new Map(results.map((r, i) => [r.id, i] as const));
+    for (let i = 0; i < prepared.length; i += 1) {
+      const p = prepared[i];
+      const changes = batchResults[i * 2]?.meta?.changes ?? 0;
+      if (changes > 0) {
+        stored += 1;
+      } else {
+        const idx = resultIndex.get(p.id);
+        if (idx !== undefined) results[idx] = { id: p.id, status: "duplicate" };
+      }
+    }
   }
 
-  const stored = prepared.length;
-  return { results, stored, charged: stored };
+  return { results, stored, charged: prepared.length };
 }
 
 export async function handleEvents(request: Request, env: Env, scope: Scope): Promise<Response> {
