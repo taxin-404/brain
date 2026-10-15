@@ -7,7 +7,8 @@ search, and recall into future sessions. Runs on Cloudflare Workers (D1 + R2).
 memory layer extracts durable facts through the AI Gateway, blends semantic + keyword
 search, lands reviewable proposals, and applies them through a reversible review engine
 (supersession + provenance + confirm-gated forgets): 27 test files / 168 tests green
-offline (zero network); live acceptance runs single-shot post-merge. Capture and MCP
+offline (zero network); live acceptance passed 2026-10-15 single-shot post-merge
+(evidence in the Phase 3 plan). Capture and MCP
 recall are registered globally in
 the owner's OpenCode config and proven live end-to-end (owner-approved 2026-10-15; see
 `.superpowers/sdd/2026-10-15-brain-phase-0-1/task-14-log.md`).
@@ -103,6 +104,12 @@ be undone.
   vectors — a miss can only mean the forgetting worked, never weak similarity.
 - **Ops:** no new migrations (schema complete since 0001–0005) and no new
   secrets; MCP still only proposes — applying stays on the Bearer HTTP API.
+- **Acceptance (2026-10-15, single-shot, post-merge):** corrected the live
+  `helios` fact → auto-applied (`review_mode:"auto"`, `applied:true`); `why`
+  showed both versions (old text kept for provenance); the keyword search ranked
+  the corrected object #1 (vector catches up on the next sweep); `undo`
+  restored the original fact. Full evidence in the
+  [Phase 3 plan](docs/plans/2026-10-15-brain-phase-3.md) closing section.
 
 ## Read-first map
 

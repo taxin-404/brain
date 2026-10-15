@@ -387,10 +387,12 @@ you can also push") before execution; the ledger records it.
 
 ## Merge + acceptance (closing commit — one push)
 
-- [ ] Merge `phase-3` → `master`, push; watch the CI build once (`GET
+- [x] Merge `phase-3` → `master`, push; watch the CI build once (`GET
       /builds/workers/{tag}/builds`, status + outcome only). No migration to
       apply (none added).
-- [ ] Live acceptance, single-shot each (admin token from
+      Evidence: fast-forward `c5a11e9..9e3905e`; CI build `773baa53-0765-4fd1-a00a-3e8f08a02e4b`
+      status `stopped` / outcome `success` (2026-10-15T17:23:55Z → deployed).
+- [x] Live acceptance, single-shot each (admin token from
       `.secrets/prod.env`; no loops):
       1. `GET /v1/health-report` = 200.
       2. `POST /v1/facts/01M506C0MP8G4J6GS80BR7EPVA/correct` with
@@ -403,5 +405,14 @@ you can also push") before execution; the ledger records it.
          embeds it; keyword/DB checks are the primary evidence).
       5. `POST /v1/proposals/<id>/undo` → `undone:true`; spot-check the old
          fact is `active` again via `why`.
+      Evidence (all HTTP 200/201, single-shot): health `used:3111` rows; correct →
+      `{"proposal_id":"01M509PM84WYEB3Z6B0CDYX06E","review_mode":"auto","applied":true}`;
+      `why` → versions `01M506C0MP8G4J6GS80BR7EPVA` (superseded, kept text
+      `internal analytics dashboard`) + `01M509PMQ6DV8RRQ48MTBHX24Z` (active,
+      `the internal metrics dashboard`); paraphrased search vector-lagged as
+      anticipated → keyword query `internal metrics dashboard` ranked the new
+      fact #1; `undo` → `{"undone":true}` and `why` shows the old fact `active`
+      (`current:true`) again.
 - [ ] Owner actions at merge (reminder only, already tracked): Google Cloud
-      budget alert; key rotation from the Phase-2 ledger.
+      budget alert; key rotation from the Phase-2 ledger. **(owner's, not
+      actionable overnight; carried in the status report)**
