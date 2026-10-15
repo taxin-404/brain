@@ -1,0 +1,16 @@
+{
+  "name": "brain-capture",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@opencode/plugin": "^2.0.29"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.0"
+  }
+}
