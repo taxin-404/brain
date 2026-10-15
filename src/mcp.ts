@@ -180,16 +180,37 @@ export function createBrainMcpServer(env: Env, scope: Scope): McpServer {
   server.registerTool(
     "propose_procedure",
     {
-      description: "Propose a new procedure (always manual review; requires propose scope).",
-      inputSchema: z.object({ name: z.string(), steps: z.array(z.string()).min(1), reason: z.string().optional() }),
+      description: "Propose a new procedure or a new version of one (always manual review; requires propose scope).",
+      inputSchema: z.object({
+        name: z.string(),
+        steps: z.array(z.string()).min(1),
+        procedure_id: z.string().optional(), // target an existing procedure for a new version
+        trigger: z.string().optional(),
+        tools: z.array(z.string()).min(1).optional(),
+        success_criteria: z.string().optional(),
+        failure_notes: z.string().optional(),
+        evidence_event_id: z.string().optional(),
+        reason: z.string().optional(),
+      }),
     },
-    async ({ name, steps, reason }) => {
+    async ({ name, steps, procedure_id, trigger, tools, success_criteria, failure_notes, evidence_event_id, reason }) => {
       if (!canPropose(scope)) return PROPOSE_DENIED;
       return proposalReply(() =>
         createProposal(env, scope, {
           kind: "procedure",
-          payload: { name, steps, ...(reason ? { reason } : {}) },
+          payload: {
+            name,
+            steps,
+            ...(procedure_id ? { procedure_id } : {}),
+            ...(trigger ? { trigger } : {}),
+            ...(tools ? { tools } : {}),
+            ...(success_criteria ? { success_criteria } : {}),
+            ...(failure_notes ? { failure_notes } : {}),
+            ...(reason ? { reason } : {}),
+          },
           target_type: "procedure",
+          ...(procedure_id ? { target_id: procedure_id } : {}),
+          ...(evidence_event_id ? { evidence_event_id } : {}),
         }),
       );
     },

@@ -137,15 +137,15 @@ status, current_version, origin_trust, last_success_at, created_at}]}`;
 `trigger`, `tools[]`, `success_criteria`, `failure_notes`,
 `evidence_event_id`; payload carries them.
 
-- [ ] **Step 1: Tests** — MCP propose with the new fields lands a manual
+- [x] **Step 1: Tests** — MCP propose with the new fields lands a manual
   proposal; e2e narrative (the done-when sentence): agent proposes a repeated
   workflow → admin applies (draft v1) → admin approves → **approved
   procedure exists**; agent proposes a refinement (`procedure_id`) → apply →
   **draft again** (re-approval gate) → approve → v2 approved, v1 intact; and
   every agent-token attempt to approve is 403.
-- [ ] **Step 2: Run and watch fail.**
-- [ ] **Step 3: Implement** schema extension; fix honestly if the eval bites.
-- [ ] **Step 4: Gate + commit** — `feat(mcp): propose_procedure fields + procedure eval`.
+- [x] **Step 2: Run and watch fail.**
+- [x] **Step 3: Implement** schema extension; fix honestly if the eval bites.
+- [x] **Step 4: Gate + commit** — `feat(mcp): propose_procedure fields + procedure eval`.
 
 ### Task 5 — docs + close-out
 
