@@ -28,7 +28,8 @@ migrations/     D1 schema 0001–0005 (wrangler d1 migrations apply)
 test/           vitest suite (@cloudflare/vitest-plugin, D1 via miniflare)
 plugin/         OpenCode capture plugin — event-sourced capture + diagnostics (Tasks 13–14)
 docs/           spec + plan + key rotation
-wrangler.jsonc  Worker config: D1 brain-db, R2 brain-raw, cron "*/30 * * * *"
+wrangler.jsonc  Worker config: D1 brain-db, R2 brain-raw, cron "*/30 * * * *",
+                keep_vars + secrets.required (see Deploy & CI)
 ```
 
 ## Develop
@@ -51,6 +52,45 @@ live in `vitest.config.ts` miniflare bindings — the suite runs from a fresh cl
 - D1 `brain-db` + R2 `brain-raw` live (APAC region), 5/5 remote migrations applied
 - Prod secrets set via `wrangler secret put`; values escrowed out-of-band, **never in the repo**
 - Cron `*/30 * * * *`: prune expired confirm tokens + budget warn/breaker logging
+
+## Deploy & CI (Cloudflare Workers Builds)
+
+Pushing to `master` makes Cloudflare build and deploy `brain-api` automatically
+(GitHub repo `taxin-404/brain`, production branch `master`).
+
+- **Build command:** `npm ci && npm test` — a red test suite blocks the deploy.
+- **Deploy command:** `npx wrangler deploy --env=""` — the trailing `--env=""`
+  targets the top-level config on purpose: `env` blocks do **not** inherit
+  bindings, so `--env prod` would deploy a worker with zero D1/R2 bindings.
+- **Secrets survive deploys** (worker-level, never touched by a deploy):
+  `PAYLOAD_KEK`, `CONTENT_HMAC_KEY`, `MCP_READ_TOKEN`, `MCP_PROPOSE_TOKEN`,
+  `ADMIN_TOKEN`. `keep_vars: true` additionally protects dashboard-set plain-text
+  vars, and `secrets.required` in `wrangler.jsonc` makes a deploy *fail loudly*
+  if any of the 5 secrets is missing. Symptom of a missing secret: every
+  authenticated route 401s.
+- **Preview builds are intentionally NOT configured** — previews would run
+  against the same prod D1/R2; there is no preview isolation yet.
+
+Builds API (for agents; management token in `.secrets/cf-builds.env` —
+user-scoped, `Workers Builds Configuration:Edit` + `Workers Scripts:Read`):
+
+```bash
+T=$(source .secrets/cf-builds.env && echo -n "$CF_BUILDS_TOKEN"); A=1ce49401e2d9c63449f7621e4f5e10e9
+TAG=000d2f15931e461dad9bb9b423ab461a          # brain-api worker tag (external_script_id)
+TRIGGER=a69e5d96-f3e4-4505-8cb9-99ad22fcde70  # "Deploy production" trigger
+
+# list builds / trigger one manually / read logs
+curl -s -H "Authorization: Bearer $T" "https://api.cloudflare.com/client/v4/accounts/$A/builds/workers/$TAG/builds"
+curl -s -X POST -H "Authorization: Bearer $T" -H "Content-Type: application/json" \
+  "https://api.cloudflare.com/client/v4/accounts/$A/builds/triggers/$TRIGGER/builds" -d '{"branch":"master"}'
+curl -s -H "Authorization: Bearer $T" "https://api.cloudflare.com/client/v4/accounts/$A/builds/builds/<build_uuid>/logs"
+```
+
+The deploy step authenticates with the account's **"terabox build token"**
+(`7d897a7d-0b7f-4ba7-a13a-a2237258c485`), reused because build tokens cannot be
+created via API without token-creation permissions. It is account-scoped and
+nothing about it is terabox-specific; deleting it would break both projects'
+builds.
 
 ## Progress
 
