@@ -4,6 +4,7 @@ import { json } from "./http";
 import { healthReport } from "./health";
 import { handleEvents } from "./ingest";
 import { handleExtract } from "./extract";
+import { handleConsolidate } from "./consolidate";
 import { handleGetFact, handleWhy } from "./facts";
 import { handleGetEntity } from "./graph";
 import { handleMintToken, handlePurge } from "./purge";
@@ -100,6 +101,12 @@ const ROUTES: Array<{ method: string; re: RegExp; need: Need; handler: Handler }
     re: /^\/v1\/extract$/,
     need: "admin",
     handler: (request, env) => handleExtract(request, env),
+  },
+  {
+    method: "POST",
+    re: /^\/v1\/consolidate$/,
+    need: "admin",
+    handler: (_request, env) => handleConsolidate(env),
   },
   {
     method: "GET",

@@ -148,16 +148,16 @@ sweep on `*/30` only; AUDIT actions free-form strings.
   report, no throw.
 - `handleConsolidate(env): Promise<Response>` → 200 run JSON (admin route).
 
-- [ ] **Step 1: Tests** — expiry retired with counters; cross-unit merge
+- [x] **Step 1: Tests** — expiry retired with counters; cross-unit merge
   applied (confidence = noisy-OR, capped; sources unioned; victim
   superseded); same-unit pair NOT merged (victim adds no unit → skipped);
   deleted + restricted objects never appear in the captured request body;
   conflicts counted only; LLM failure → degraded + expiry still applied + run
   row present; second run merges nothing (idempotent); route: admin 200,
   read scope 403.
-- [ ] **Step 2: Run and watch fail.**
-- [ ] **Step 3: Implement** prompt + engine + route.
-- [ ] **Step 4: Gate + commit** — `feat(consolidate): nightly merge/retire engine + manual kick`.
+- [x] **Step 2: Run and watch fail.**
+- [x] **Step 3: Implement** prompt + engine + route.
+- [x] **Step 4: Gate + commit** — `feat(consolidate): nightly merge/retire engine + manual kick`.
 
 ### Task 3 — reflections + routes
 
