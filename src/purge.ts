@@ -27,6 +27,30 @@ export async function mintConfirmToken(env: Env, target: string): Promise<{ toke
   return { token, expires_at };
 }
 
+/** Verify and consume a single-use confirm token for `target` (spec §7).
+ *  Extracted from `purgeEvent` so the review engine can gate fact purges with
+ *  the same out-of-band confirmation (Phase 3). */
+export async function consumeConfirmToken(env: Env, target: string, confirmToken: string): Promise<void> {
+  const db = env.BRAIN_DB;
+  const now = Date.now();
+
+  // 1. verify
+  const tok = await db
+    .prepare(`SELECT target, expires_at, used_at FROM confirm_tokens WHERE token = ?1`)
+    .bind(confirmToken)
+    .first<{ target: string; expires_at: number; used_at: number | null }>();
+  if (!tok || tok.used_at !== null || tok.expires_at <= now || tok.target !== target) {
+    throw new PurgeError("invalid_token", "confirm token invalid");
+  }
+
+  // 2. consume (single-use)
+  const consumed = await db
+    .prepare(`UPDATE confirm_tokens SET used_at = ?1 WHERE token = ?2 AND used_at IS NULL`)
+    .bind(now, confirmToken)
+    .run();
+  if ((consumed.meta.changes ?? 0) !== 1) throw new PurgeError("invalid_token", "confirm token already used");
+}
+
 /** Crypto-shred purge — spec §4's exact 6-step sequence (plus verify/consume/audit):
  *  1 verify token (exists, unused, unexpired, target matches)
  *  2 consume it (single-use; reject when 0 rows change)
@@ -41,24 +65,19 @@ export async function mintConfirmToken(env: Env, target: string): Promise<{ toke
  *  token resumes safely (steps are individually idempotent: FTS delete of an
  *  absent row is a no-op, R2 delete of an absent key succeeds). */
 export async function purgeEvent(env: Env, eventId: string, confirmToken: string, reason: string): Promise<{ purged: boolean }> {
+  await consumeConfirmToken(env, `event:${eventId}`, confirmToken);
+  return purgeEventCore(env, eventId, reason);
+}
+
+/** Steps 3-9 of the sequence, with the confirmation already consumed — the
+ *  review engine's `forget` apply path reuses this after its own token check. */
+export async function purgeEventCore(
+  env: Env,
+  eventId: string,
+  reason: string,
+  actor: "user" | "system" = "user",
+): Promise<{ purged: boolean }> {
   const db = env.BRAIN_DB;
-  const now = Date.now();
-
-  // 1. verify
-  const tok = await db
-    .prepare(`SELECT target, expires_at, used_at FROM confirm_tokens WHERE token = ?1`)
-    .bind(confirmToken)
-    .first<{ target: string; expires_at: number; used_at: number | null }>();
-  if (!tok || tok.used_at !== null || tok.expires_at <= now || tok.target !== `event:${eventId}`) {
-    throw new PurgeError("invalid_token", "confirm token invalid");
-  }
-
-  // 2. consume (single-use)
-  const consumed = await db
-    .prepare(`UPDATE confirm_tokens SET used_at = ?1 WHERE token = ?2 AND used_at IS NULL`)
-    .bind(now, confirmToken)
-    .run();
-  if ((consumed.meta.changes ?? 0) !== 1) throw new PurgeError("invalid_token", "confirm token already used");
 
   // 3. load
   const row = await db
@@ -90,7 +109,7 @@ export async function purgeEvent(env: Env, eventId: string, confirmToken: string
 
   // 9. audit
   await writeAudit(db, {
-    actor: "user",
+    actor,
     action: "purge",
     targetType: "event",
     targetId: eventId,

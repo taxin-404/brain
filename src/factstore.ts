@@ -2,7 +2,7 @@ import { writeAudit } from "./audit";
 import type { Env } from "./env";
 import { resolveObjectEntity } from "./entities";
 import { newFactId, type FactKind } from "./facts";
-import { linkFactEdges } from "./graph";
+import { closeFactEdges, linkFactEdges } from "./graph";
 import { EMBEDDING_MODEL } from "./llm";
 
 /** The single fact write path. Extraction, the review engine, and
@@ -123,4 +123,111 @@ export async function deleteFactVector(env: Env, factId: string): Promise<void> 
   } catch (err) {
     console.log(`[factstore] vector delete failed for ${factId}: ${String(err)}`);
   }
+}
+
+/** Soft-supersede a fact (design §4: supersession never deletes): the old row
+ *  keeps its object text and FTS entry for `why`, loses its vector, closes its
+ *  edge, and points at the replacement via `superseded_by` + `invalid_at`. */
+export async function supersedeFact(
+  env: Env,
+  oldFactId: string,
+  newFactId: string,
+  now: number,
+  actor: "user" | "system" = "system",
+): Promise<void> {
+  const db = env.BRAIN_DB;
+  const old = await db
+    .prepare(`SELECT subject_id, predicate, object_entity_id, object_text, status FROM facts WHERE id = ?1`)
+    .bind(oldFactId)
+    .first<{
+      subject_id: string;
+      predicate: string;
+      object_entity_id: string | null;
+      object_text: string | null;
+      status: string;
+    }>();
+  if (!old) throw new Error(`supersedeFact: fact not found: ${oldFactId}`);
+  if (old.status !== "active") throw new Error(`supersedeFact: fact not active: ${oldFactId} (${old.status})`);
+
+  await db
+    .prepare(`UPDATE facts SET status = 'superseded', invalid_at = ?1, superseded_by = ?2 WHERE id = ?3`)
+    .bind(now, newFactId, oldFactId)
+    .run();
+  await closeFactEdges(env, { subjectId: old.subject_id, predicate: old.predicate, objectEntityId: old.object_entity_id }, now);
+  await deleteFactVector(env, oldFactId);
+
+  await writeAudit(db, {
+    actor,
+    action: "supersede",
+    targetType: "fact",
+    targetId: oldFactId,
+    before: { status: "active", object: old.object_text },
+    after: { status: "superseded", superseded_by: newFactId },
+  });
+}
+
+/** Mark a fact disputed (an applied dispute proposal). Only active facts can
+ *  become disputed; callers surface the review-tier errors. */
+export async function disputeFact(env: Env, factId: string, now: number): Promise<void> {
+  const db = env.BRAIN_DB;
+  const row = await db.prepare(`SELECT status FROM facts WHERE id = ?1`).bind(factId).first<{ status: string }>();
+  if (!row) throw new Error(`disputeFact: fact not found: ${factId}`);
+  if (row.status !== "active") throw new Error(`disputeFact: fact not active: ${factId} (${row.status})`);
+
+  await db.prepare(`UPDATE facts SET status = 'disputed' WHERE id = ?1`).bind(factId).run();
+  await writeAudit(db, {
+    actor: "system",
+    action: "dispute",
+    targetType: "fact",
+    targetId: factId,
+    before: { status: "active" },
+    after: { status: "disputed" },
+  });
+}
+
+/** Hard purge of a fact (design §4: "hard purge nulls object_text"): FTS
+ *  `'delete'` with the old text (skipped when already NULL — re-runs are
+ *  idempotent), object_text NULL, status deleted, vector removed, edges
+ *  closed, audit before/after. `fact_sources` rows are kept (they hold no
+ *  text — they are provenance ids). */
+export async function purgeFact(
+  env: Env,
+  factId: string,
+  opts: { actor?: "user" | "system"; now?: number } = {},
+): Promise<void> {
+  const db = env.BRAIN_DB;
+  const now = opts.now ?? Date.now();
+  const row = await db
+    .prepare(`SELECT rowid, subject_id, predicate, object_entity_id, object_text, status FROM facts WHERE id = ?1`)
+    .bind(factId)
+    .first<{
+      rowid: number;
+      subject_id: string;
+      predicate: string;
+      object_entity_id: string | null;
+      object_text: string | null;
+      status: string;
+    }>();
+  if (!row) throw new Error(`purgeFact: fact not found: ${factId}`);
+
+  if (row.object_text !== null) {
+    // FTS5 external-content delete must be handed the OLD values
+    await db
+      .prepare(`INSERT INTO facts_fts(facts_fts, rowid, object_text) VALUES ('delete', ?1, ?2)`)
+      .bind(row.rowid, row.object_text)
+      .run();
+    await db.prepare(`UPDATE facts SET object_text = NULL WHERE id = ?1`).bind(factId).run();
+  }
+  await db.prepare(`UPDATE facts SET status = 'deleted' WHERE id = ?1 AND status != 'deleted'`).bind(factId).run();
+  await closeFactEdges(env, { subjectId: row.subject_id, predicate: row.predicate, objectEntityId: row.object_entity_id }, now);
+  await deleteFactVector(env, factId);
+
+  await writeAudit(db, {
+    actor: opts.actor ?? "user",
+    action: "purge",
+    targetType: "fact",
+    targetId: factId,
+    before: { object: row.object_text, status: row.status },
+    after: { object: null, status: "deleted" },
+  });
 }

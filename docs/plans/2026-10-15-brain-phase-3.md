@@ -238,7 +238,7 @@ you can also push") before execution; the ledger records it.
 - `disputeFact(env, factId, now)` — `status='disputed'` (allowed only from
   `active`) + audit.
 
-- [ ] **Step 1: Tests** — correction: old superseded (all three columns),
+- [x] **Step 1: Tests** — correction: old superseded (all three columns),
   new active `user_stated` 0.9, sources copied, old vector deleted; audit
   before/after present; apply on non-pending → `not_pending`; correction of a
   superseded fact → `conflict`; forget fact without token → `invalid_token`;
@@ -248,9 +248,9 @@ you can also push") before execution; the ledger records it.
   purge test pattern); dispute on non-active → `conflict`; block apply → block updated;
   undo correction restores old `active` + new `archived`; undo forget →
   `irreversible`; undo twice → `not_applied`; procedure apply → `unsupported`.
-- [ ] **Step 2: Run and watch fail.**
-- [ ] **Step 3: Implement** purge refactor, factstore additions, `src/review.ts`.
-- [ ] **Step 4: Gate + commit** —
+- [x] **Step 2: Run and watch fail.**
+- [x] **Step 3: Implement** purge refactor, factstore additions, `src/review.ts`.
+- [x] **Step 4: Gate + commit** —
   `feat(review): apply/discard/undo engine with supersession + purge`.
 
 ### Task 4 — REST review surface + auto-apply at creation
