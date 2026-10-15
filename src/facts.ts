@@ -226,3 +226,116 @@ export async function handleGetFact(env: Env, scope: Scope, id: string): Promise
 
   return json({ ...fact, sources });
 }
+
+interface VersionRow {
+  id: string;
+  object: string | null;
+  status: string;
+  fact_kind: string;
+  confidence: number;
+  valid_at: number | null;
+  invalid_at: number | null;
+  learned_at: number;
+  superseded_by: string | null;
+}
+
+const VERSION_COLUMNS = `id, object_text AS object, status, fact_kind, confidence,
+       valid_at, invalid_at, learned_at, superseded_by`;
+
+/** GET /v1/why/:fact_id — provenance plus the full version chain. Walks the
+ *  supersession chain in both directions (`superseded_by` forward, `WHERE
+ *  superseded_by = <current>` back), so the same story comes back whether the
+ *  caller asks from the old or the new end. `current` marks the version in
+ *  effect (status active). Restricted facts are hidden (404) from non-admin
+ *  scopes; restricted-privacy source excerpts are masked for non-admin. */
+export async function handleWhy(env: Env, scope: Scope, id: string): Promise<Response> {
+  const db = env.BRAIN_DB;
+  const fact = await db
+    .prepare(
+      `SELECT f.id, e.name AS subject, f.predicate, f.object_text AS object, f.fact_kind, f.confidence,
+              f.status, f.sensitivity, f.valid_at, f.invalid_at, f.expires_at, f.expired_at,
+              f.learned_at, f.first_seen_at, f.last_confirmed_at
+       FROM facts f JOIN entities e ON e.id = f.subject_id
+       WHERE f.id = ?1`,
+    )
+    .bind(id)
+    .first<FactDetail>();
+  if (!fact) return json({ error: "not_found" }, 404);
+  if (fact.sensitivity === "restricted" && scope !== "ADMIN") return json({ error: "not_found" }, 404);
+
+  // Forward: follow superseded_by pointers to newer versions.
+  const chain: VersionRow[] = [];
+  const seen = new Set<string>();
+  let cursor: string | null = id;
+  while (cursor && !seen.has(cursor)) {
+    seen.add(cursor);
+    const row: VersionRow | null = await db
+      .prepare(`SELECT ${VERSION_COLUMNS} FROM facts WHERE id = ?1`)
+      .bind(cursor)
+      .first<VersionRow>();
+    if (!row) break;
+    chain.push(row);
+    cursor = row.superseded_by;
+  }
+  // Backward: older versions that were superseded into this chain.
+  let back: string = id;
+  while (true) {
+    const prev: VersionRow | null = await db
+      .prepare(`SELECT ${VERSION_COLUMNS} FROM facts WHERE superseded_by = ?1 ORDER BY learned_at DESC, id DESC LIMIT 1`)
+      .bind(back)
+      .first<VersionRow>();
+    if (!prev || seen.has(prev.id)) break;
+    seen.add(prev.id);
+    chain.push(prev);
+    back = prev.id;
+  }
+
+  const versions = chain
+    .sort((a, b) => a.learned_at - b.learned_at || (a.id < b.id ? -1 : 1))
+    .map((v) => ({
+      id: v.id,
+      object: v.object,
+      status: v.status,
+      fact_kind: v.fact_kind,
+      confidence: v.confidence,
+      valid_at: v.valid_at,
+      invalid_at: v.invalid_at,
+      learned_at: v.learned_at,
+      superseded_by: v.superseded_by,
+      deleted: v.status === "deleted",
+      current: v.status === "active",
+    }));
+
+  const { results: sources } = await db
+    .prepare(
+      `SELECT fs.event_id, ev.ts, ev.kind, ev.actor, ev.redacted, ev.excerpt, ev.privacy
+       FROM fact_sources fs JOIN events ev ON ev.id = fs.event_id
+       WHERE fs.fact_id = ?1
+       ORDER BY ev.ts ASC`,
+    )
+    .bind(id)
+    .all<{
+      event_id: string;
+      ts: number;
+      kind: string;
+      actor: string;
+      redacted: number;
+      excerpt: string | null;
+      privacy: string;
+    }>();
+
+  const sourceRows = sources.map((s) => {
+    const restricted = s.privacy === "restricted" && scope !== "ADMIN";
+    return {
+      event_id: s.event_id,
+      ts: s.ts,
+      kind: s.kind,
+      actor: s.actor,
+      purged: s.redacted === 1,
+      excerpt: restricted ? null : s.excerpt,
+      ...(restricted ? { restricted: true } : {}),
+    };
+  });
+
+  return json({ fact, versions, sources: sourceRows });
+}

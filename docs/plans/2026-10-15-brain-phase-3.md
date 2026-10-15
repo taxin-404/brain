@@ -324,13 +324,13 @@ you can also push") before execution; the ledger records it.
     non-admin (row still listed with `excerpt:null, restricted:true`);
     `purged = redacted === 1`.
 
-- [ ] **Step 1: Tests** — after a correction, `why(old)` and `why(new)` both
+- [x] **Step 1: Tests** — after a correction, `why(old)` and `why(new)` both
   return a 2-version chain flagged `current` correctly ("shows both versions");
   purged source event shows `purged:true`; restricted fact 404 for read scope,
   present for admin; unknown id 404.
-- [ ] **Step 2: Run and watch fail.**
-- [ ] **Step 3: Implement** `handleWhy` + route.
-- [ ] **Step 4: Gate + commit** — `feat(why): provenance + version chain endpoint`.
+- [x] **Step 2: Run and watch fail.**
+- [x] **Step 3: Implement** `handleWhy` + route.
+- [x] **Step 4: Gate + commit** — `feat(why): provenance + version chain endpoint`.
 
 ### Task 6 — Contradiction handling in the extraction pipeline
 

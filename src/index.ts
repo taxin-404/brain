@@ -4,7 +4,7 @@ import { json } from "./http";
 import { healthReport } from "./health";
 import { handleEvents } from "./ingest";
 import { handleExtract } from "./extract";
-import { handleGetFact } from "./facts";
+import { handleGetFact, handleWhy } from "./facts";
 import { handleGetEntity } from "./graph";
 import { handleMintToken, handlePurge } from "./purge";
 import { handleSearch } from "./search";
@@ -64,6 +64,12 @@ const ROUTES: Array<{ method: string; re: RegExp; need: Need; handler: Handler }
     re: /^\/v1\/facts\/([A-Za-z0-9_-]+)$/,
     need: "read",
     handler: (_request, env, scope, _ctx, match) => handleGetFact(env, scope, match[1]),
+  },
+  {
+    method: "GET",
+    re: /^\/v1\/why\/([A-Za-z0-9_-]+)$/,
+    need: "read",
+    handler: (_request, env, scope, _ctx, match) => handleWhy(env, scope, match[1]),
   },
   {
     method: "GET",
