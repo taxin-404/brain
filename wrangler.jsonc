@@ -24,7 +24,9 @@
   "vars": {
     "AI_GATEWAY_BASE": "https://gateway.ai.cloudflare.com/v1/1ce49401e2d9c63449f7621e4f5e10e9/brain/google-ai-studio"
   },
-  "triggers": { "crons": ["*/30 * * * *"] },
+  // Four of the five free cron slots: 30-min sweep, nightly consolidation,
+  // weekly reflection (Mon 04:00), monthly reflection (1st 04:00).
+  "triggers": { "crons": ["*/30 * * * *", "0 3 * * *", "0 4 * * 1", "0 4 1 * *"] },
   "observability": { "enabled": true },
 
   // Environments do NOT inherit bindings (d1_databases, r2_buckets, secrets, ...) from the

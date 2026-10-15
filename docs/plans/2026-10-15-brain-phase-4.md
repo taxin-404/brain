@@ -204,13 +204,13 @@ sweep on `*/30` only; AUDIT actions free-form strings.
 - `scheduled` calls the mapped runner, each wrapped so a throw only logs
   (a cron must never die silently); unknown cron logs `[cron] unknown`.
 
-- [ ] **Step 1: Tests** — mapping for all four strings + unknown → null;
+- [x] **Step 1: Tests** — mapping for all four strings + unknown → null;
   `scheduled` with a fake controller for `0 3 * * *` runs consolidation
   (empty DB → run row inserted, degraded false); `*/30` still runs the sweep
   (existing sweep tests keep passing).
-- [ ] **Step 2: Run and watch fail.**
-- [ ] **Step 3: Implement** dispatch + config.
-- [ ] **Step 4: Gate + commit** — `feat(cron): nightly consolidation + reflection triggers`.
+- [x] **Step 2: Run and watch fail.**
+- [x] **Step 3: Implement** dispatch + config.
+- [x] **Step 4: Gate + commit** — `feat(cron): nightly consolidation + reflection triggers`.
 
 ### Task 5 — health report additions
 
