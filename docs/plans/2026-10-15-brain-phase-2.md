@@ -159,21 +159,27 @@ live acceptance.
 
 - [x] Vectorize index: `npx wrangler vectorize create brain-memory --dimensions=768 --metric=cosine`
       (fallback: dashboard → Vectorize → Create index, 768 dims, cosine).
-- [ ] Metadata indexes (filter fields): `npx wrangler vectorize create-metadata-index brain-memory --property-name=type --type=string`
+- [x] Metadata indexes (filter fields): `npx wrangler vectorize create-metadata-index brain-memory --property-name=type --type=string`
       and the same for `status` and `sensitivity` (older wrangler spellings may
       use `--propertyName`; check `npx wrangler vectorize --help`).
       Status 2026-10-15: all three accepted ("enqueued" mutations) but
       `list-metadata-index` still shows none — re-verify **active** before merge.
-- [ ] AI Gateway: try the API with the wrangler OAuth token —
+      **Verified active 2026-10-15 pre-merge: `type`, `status`, `sensitivity` all listed.**
+- [x] AI Gateway: try the API with the wrangler OAuth token —
       `POST /accounts/{id}/ai-gateway/gateways` body `{"id":"brain","name":"brain"}`.
       If perms fail: dashboard → AI Gateway → Create gateway, id `brain`
       (enable logs by default). Record the outcome.
       **Outcome 2026-10-15: wrangler OAuth rejected (`Authentication error`
       10000); no CLI or token route available — owner action: create gateway id
       `brain` in the dashboard (≈30s). Live extraction 404s until it exists.**
+      **Resolved 2026-10-15: owner created gateway `brain` (auth OFF, logs OFF);
+       live extraction verified working the same session (30 events → 5 facts →
+       5 vectors; paraphrase search returns them).**
 - [x] `GEMINI_API_KEY` Worker secret — **already done 2026-10-15** (verified via
       `wrangler secret list`, 6 secrets). No action.
-- [ ] Owner reminder at merge: Google Cloud billing budget alert (~$5/mo).
+- [x] Owner reminder at merge: Google Cloud billing budget alert (~$5/mo).
+      (Reminder delivered in the merge status updates; the alert itself remains
+      an owner action — tracked in the close-out ledger note.)
 
 ## Task 1 — Migration 0006 + config + bindings
 
@@ -489,10 +495,19 @@ ledger.
 
 ## Merge + acceptance (single-shot, after all gates green)
 
-- [ ] Merge `phase-2` → `master`, push; watch the CI build once (`GET
+- [x] Merge `phase-2` → `master`, push; watch the CI build once (`GET
       /builds/workers/{tag}/builds`, status + outcome only — no polling loops).
-- [ ] Live acceptance, single-shot each: `GET /v1/health-report` = 200 with new
+      **Done 2026-10-15: fast-forward to `f6e8390`, build success (deployed);
+      prod migration `0006_extractions.sql` applied the same day.**
+- [x] Live acceptance, single-shot each: `GET /v1/health-report` = 200 with new
       `extractions` block; `POST /v1/extract` once (admin) → run stats; `GET
       /v1/search?q=<paraphrase of a real earlier note>` returns it in `facts`.
+      **Done 2026-10-15: health 200 + `extractions` block; kick `{20,2}` → 20
+      processed (0 facts — agent chatter) then `{30,3}` → 30 processed / 5 facts
+      / 5 embedded / 0 failed; paraphrase search "what did the user name their
+      analytics dashboard" returned the `helios` fact rank 1 (`results: []` —
+      pure vector path, no `degraded`). Pre-fix, the same search ran
+      keyword-only with `degraded: true` — degradation verified live too.
+      Sweeps continue draining the backlog within caps `{40,4}`/30 min.**
 - [ ] Owner actions at merge: Google Cloud budget alert; (optional) rotate the
-      chat-pasted Gemini key.
+      chat-pasted Gemini key. **Still open 2026-10-15 (tracked in the ledger).**
