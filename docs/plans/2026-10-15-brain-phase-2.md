@@ -254,11 +254,11 @@ export async function embedTexts(env: Env, texts: string[]): Promise<number[][]>
 
 **Files:** `src/prompts.ts`, `src/facts.ts`, `test/facts.test.ts`
 
-- [ ] `src/prompts.ts`: `FACT_EXTRACTION_PROMPT` — copy spec §6 [FACT EXTRACTION]
+- [x] `src/prompts.ts`: `FACT_EXTRACTION_PROMPT` — copy spec §6 [FACT EXTRACTION]
       **verbatim**, then append:
       `- Additionally include "subject_type" (Person|Project|Service|Database|Tool|Goal|Preference|Event|Document) per candidate when obvious.`
       `- Return a JSON array (possibly empty). No prose, no markdown.`
-- [ ] `src/facts.ts`:
+- [x] `src/facts.ts`:
   ```ts
   export const factCandidateSchema = z.array(z.object({
     subject: z.string(), subject_type: z.string().optional(), predicate: z.string(),
@@ -275,19 +275,19 @@ export async function embedTexts(env: Env, texts: string[]): Promise<number[][]>
   export function normalizeObjectText(s: string): string  // trim, lower, collapse whitespace
   export function buildEmbedText(f: { subjectName: string; predicate: string; objectText: string }): string
   ```
-- [ ] Rules exactly as "Global constraints" (kind/confidence clamps; `predicate`
+- [x] Rules exactly as "Global constraints" (kind/confidence clamps; `predicate`
       → lower, spaces→`_`, keep `[a-z0-9_]`; drop empty subject/object; drop
       candidates whose `event_id` is not in `ctx`). Injection: candidate flagged
       `injection_suspected` → drop **all candidates for that candidate's
       `event_id`** and report that event id in `injectionEvents`; a flag without
       a mappable `event_id` → drop the whole batch.
-- [ ] `buildEmbedText` = `` `${subjectName} ${predicate.replace(/_/g, " ")} ${objectText}` ``.
-- [ ] Tests (table-driven, one `it` per rule): user→0.9; assistant→inferred
+- [x] `buildEmbedText` = `` `${subjectName} ${predicate.replace(/_/g, " ")} ${objectText}` ``.
+- [x] Tests (table-driven, one `it` per rule): user→0.9; assistant→inferred
       ≤0.59; tool→observed ≤0.5; external→inferred ≤0.4; guess ≤0.5;
       temporary without expires_at → inferred; restricted → object
       `[REDACTED]`; injection per-event drop; injection without event_id drops
       batch; unparseable entries skipped; normalizeObjectText cases.
-- [ ] Gate; commit `feat(phase2): extraction prompt + candidate normalization rules`.
+- [x] Gate; commit `feat(phase2): extraction prompt + candidate normalization rules`.
 
 ## Task 4 — `src/extract.ts` + `src/entities.ts`: pipeline + persistence
 
