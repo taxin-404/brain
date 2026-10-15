@@ -1,0 +1,10 @@
+
+ RUN  v4.1.11 /home/taxin/Work/brain
+
+Using secrets defined in .dev.vars
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  17:31:26
+   Duration  1.27s (transform 19ms, setup 0ms, import 27ms, tests 10ms, environment 0ms)
+
