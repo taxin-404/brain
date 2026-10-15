@@ -4,7 +4,7 @@ import type { Env, Scope } from "./env";
 import { canPropose } from "./env";
 import { healthReport } from "./health";
 import { ingestEvents } from "./ingest";
-import { searchEvents } from "./search";
+import { searchEvents, searchFacts } from "./search";
 
 /** Stateless MCP server, built fresh per request. Exactly four tools exist;
  *  `forget`/`approve`/`export`/`dispute` are deliberately NOT registered
@@ -15,17 +15,24 @@ export function createBrainMcpServer(env: Env, scope: Scope): McpServer {
   server.registerTool(
     "recall",
     {
-      description: "Keyword search over stored memory (redacted excerpts; restricted events excluded).",
+      description: "Semantic + keyword search over stored memory (redacted excerpts; restricted excluded).",
       inputSchema: z.object({ query: z.string(), limit: z.number().int().min(1).max(20).optional() }),
     },
-    async ({ query, limit }) => ({
-      content: [
-        {
-          type: "text" as const,
-          text: JSON.stringify(await searchEvents(env, query, limit ?? 8, { includeRestricted: false })),
-        },
-      ],
-    }),
+    async ({ query, limit }) => {
+      const n = limit ?? 8;
+      const [results, facts] = await Promise.all([
+        searchEvents(env, query, n, { includeRestricted: false }),
+        searchFacts(env, query, n, { includeRestricted: false }),
+      ]);
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: JSON.stringify({ results, facts: facts.facts, ...(facts.degraded ? { degraded: true } : {}) }),
+          },
+        ],
+      };
+    },
   );
 
   server.registerTool(

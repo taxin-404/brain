@@ -1,7 +1,11 @@
 import { env, exports } from "cloudflare:workers";
-import { describe, expect, it } from "vitest";
+import { http, HttpResponse } from "msw";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { Scope } from "../src/env";
-import { bearer, call } from "./helpers";
+import { bearer, call, fakeVec, installFakeVectorize } from "./helpers";
+import { network } from "./server";
+
+const EMB_URL = "https://gw.test/google-ai-studio/v1beta/models/gemini-embedding-001:batchEmbedContents";
 
 // Shared-state adaptation (no per-test isolation): test 4 asserts a budget
 // DELTA (tests 3's seeds also charge MCP_PROPOSE in this file).
@@ -36,6 +40,28 @@ const callTool = (scope: Scope, name: string, args: unknown = {}) => mcp(scope, 
 const toolText = (body: any): string => body.result.content[0].text;
 
 describe("mcp", () => {
+  beforeAll(async () => {
+    await network.enable();
+  });
+  beforeEach(() => {
+    installFakeVectorize();
+    network.use(
+      http.post(EMB_URL, async ({ request }) => {
+        const body = (await request.json()) as {
+          requests?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+        };
+        const reqs = body.requests ?? [];
+        return HttpResponse.json({ embeddings: reqs.map((r) => ({ values: fakeVec(r.content?.parts?.[0]?.text ?? "") })) });
+      }),
+    );
+  });
+  afterEach(() => {
+    network.resetHandlers();
+  });
+  afterAll(async () => {
+    await network.disable();
+  });
+
   it("requires at least read scope", async () => {
     expect((await send({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} }, {})).status).toBe(401);
   });

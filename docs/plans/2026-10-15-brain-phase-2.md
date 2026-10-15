@@ -384,24 +384,24 @@ export async function searchFacts(env: Env, q: string, limit: number,
   opts: { includeRestricted: boolean }): Promise<{ facts: FactHit[]; degraded: boolean }>
 ```
 
-- [ ] `searchFacts`: embed query (`embedTexts([q])`) → try/catch → degraded
+- [x] `searchFacts`: embed query (`embedTexts([q])`) → try/catch → degraded
       keyword-only; Vectorize `query(vec, { topK: 20, filter: { status: { $eq:
       "active" } }, returnMetadata: "all" })`; code-filter sensitivity; FTS list
       per constraints; RRF + modifiers exactly as pinned; join `entities` for
       subject names.
-- [ ] `handleSearch` adds `facts` + optional `degraded` (unchanged `results`).
-- [ ] MCP `recall`: same object; description `"Semantic + keyword search over
+- [x] `handleSearch` adds `facts` + optional `degraded` (unchanged `results`).
+- [x] MCP `recall`: same object; description `"Semantic + keyword search over
       stored memory (redacted excerpts; restricted excluded)."`.
-- [ ] `GET /v1/facts/:id` (read scope): fact row + `subject` name +
+- [x] `GET /v1/facts/:id` (read scope): fact row + `subject` name +
       `sources: [{event_id, ts, kind}]` (join `fact_sources` → `events`);
       404 when missing; restricted hidden from non-ADMIN.
-- [ ] Tests: rank ordering with crafted vectors (`fakeVec`); RRF math
+- [x] Tests: rank ordering with crafted vectors (`fakeVec`); RRF math
       (unit-compute the expected scores in the test); tie → id ASC; degraded
       path (embedding interceptor 500) → facts from keyword only +
       `degraded:true`; restricted excluded for MCP_READ, included for ADMIN +
       `include_restricted=true`; keyword eval gate untouched (run it);
       `/v1/facts/:id` shape + 404; MCP recall still never leaks tokens.
-- [ ] Gate; commit `feat(phase2): blended semantic+keyword search + fact provenance`.
+- [x] Gate; commit `feat(phase2): blended semantic+keyword search + fact provenance`.
 
 ## Task 7 — Proposals: MCP tools + REST list
 

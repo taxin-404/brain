@@ -1,101 +1,11 @@
 import { env } from "cloudflare:workers";
 import { http, HttpResponse } from "msw";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import { newEventId } from "../src/crypto";
 import { embedPendingFacts } from "../src/embed";
-import { fakeVec } from "./helpers";
+import { fakeVec, installFakeVectorize, seedFact } from "./helpers";
 import { network } from "./server";
 
 const EMB_URL = "https://gw.test/google-ai-studio/v1beta/models/gemini-embedding-001:batchEmbedContents";
-
-interface StoredVector {
-  id: string;
-  values: number[];
-  metadata: Record<string, unknown>;
-}
-
-const cosine = (a: number[], b: number[]) => {
-  let dot = 0;
-  let na = 0;
-  let nb = 0;
-  for (let i = 0; i < a.length; i += 1) {
-    dot += a[i] * b[i];
-    na += a[i] * a[i];
-    nb += b[i] * b[i];
-  }
-  return dot / (Math.sqrt(na) * Math.sqrt(nb) || 1);
-};
-
-/** In-memory Vectorize stand-in installed through the env proxy (same seam as
- *  test/smoke.test.ts — miniflare has no local Vectorize simulation). */
-const installFakeVectorize = () => {
-  const store = new Map<string, StoredVector>();
-  const index = {
-    upsert: async (vectors: Array<{ id: string; values: number[]; metadata?: Record<string, unknown> }>) => {
-      for (const v of vectors) store.set(v.id, { id: v.id, values: v.values, metadata: v.metadata ?? {} });
-      return { mutationId: "test" };
-    },
-    insert: async (vectors: Array<{ id: string; values: number[]; metadata?: Record<string, unknown> }>) => {
-      for (const v of vectors) store.set(v.id, { id: v.id, values: v.values, metadata: v.metadata ?? {} });
-      return { mutationId: "test" };
-    },
-    query: async (values: number[], options?: { topK?: number }) => {
-      const scored = [...store.values()]
-        .map((v) => ({ id: v.id, score: cosine(values, v.values) }))
-        .sort((a, b) => b.score - a.score);
-      return { matches: scored.slice(0, options?.topK ?? 10) };
-    },
-    deleteByIds: async () => ({ mutationId: "test" }),
-    describe: async () => ({ name: "fake", config: {}, vectorsCount: store.size }),
-  };
-  (env as unknown as Record<string, unknown>).VECTORIZE = index as unknown as VectorizeIndex;
-  return store;
-};
-
-let nextTs = 1_750_000_000_000;
-
-const seedFact = async (over: {
-  name: string;
-  predicate: string;
-  object: string;
-  sensitivity?: string;
-  status?: string;
-}) => {
-  const now = (nextTs += 1000);
-  const entityId = newEventId();
-  await env.BRAIN_DB.prepare(
-    `INSERT INTO entities (id, type, name, norm_name, first_seen_at, last_seen_at)
-     VALUES (?1, 'Project', ?2, ?3, ?4, ?4)`,
-  )
-    .bind(entityId, over.name, over.name.toLowerCase(), now)
-    .run();
-  const factId = newEventId();
-  const eventId = `evt-${factId}`;
-  await env.BRAIN_DB.prepare(
-    `INSERT INTO events (id, ts, ingested_at, source, actor, trust, session_id, kind, privacy, excerpt, content_hmac)
-     VALUES (?1, ?2, ?3, 'manual', 'user', 1.0, NULL, 'note', 'normal', 'embed seed', ?4)`,
-  )
-    .bind(eventId, now, now, `hmac-${eventId}`)
-    .run();
-  await env.BRAIN_DB.prepare(
-    `INSERT INTO facts (id, subject_id, predicate, object_text, fact_kind, confidence, status,
-                        learned_at, first_seen_at, last_confirmed_at, sensitivity, source_event_id,
-                        embedding_model, vec_id)
-     VALUES (?1, ?2, ?3, ?4, 'user_stated', 0.9, ?5, ?6, ?6, ?6, ?7, ?8, 'gemini-embedding-001', NULL)`,
-  )
-    .bind(
-      factId,
-      entityId,
-      over.predicate,
-      over.object,
-      over.status ?? "active",
-      now,
-      over.sensitivity ?? "normal",
-      eventId,
-    )
-    .run();
-  return factId;
-};
 
 const handleEmbed = () =>
   network.use(

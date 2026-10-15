@@ -1,5 +1,7 @@
 import { z } from "zod";
 import { newEventId } from "./crypto";
+import type { Env, Scope } from "./env";
+import { json } from "./http";
 
 export const factCandidateSchema = z.array(
   z
@@ -178,4 +180,49 @@ export function normalizeCandidates(
   }
 
   return { facts, injectionEvents: [...injectionEvents] };
+}
+
+export interface FactDetail {
+  id: string;
+  subject: string;
+  predicate: string | null;
+  object: string | null;
+  fact_kind: string;
+  confidence: number;
+  status: string;
+  sensitivity: string;
+  valid_at: number | null;
+  invalid_at: number | null;
+  expires_at: number | null;
+  expired_at: number | null;
+  learned_at: number;
+  first_seen_at: number | null;
+  last_confirmed_at: number | null;
+}
+
+/** GET /v1/facts/:id — the fact row plus its provenance (fact_sources → events,
+ *  metadata only). Restricted facts are hidden (404) from non-admin scopes. */
+export async function handleGetFact(env: Env, scope: Scope, id: string): Promise<Response> {
+  const fact = await env.BRAIN_DB.prepare(
+    `SELECT f.id, e.name AS subject, f.predicate, f.object_text AS object, f.fact_kind, f.confidence,
+            f.status, f.sensitivity, f.valid_at, f.invalid_at, f.expires_at, f.expired_at,
+            f.learned_at, f.first_seen_at, f.last_confirmed_at
+     FROM facts f JOIN entities e ON e.id = f.subject_id
+     WHERE f.id = ?1`,
+  )
+    .bind(id)
+    .first<FactDetail>();
+  if (!fact) return json({ error: "not_found" }, 404);
+  if (fact.sensitivity === "restricted" && scope !== "ADMIN") return json({ error: "not_found" }, 404);
+
+  const { results: sources } = await env.BRAIN_DB.prepare(
+    `SELECT fs.event_id, ev.ts, ev.kind
+     FROM fact_sources fs JOIN events ev ON ev.id = fs.event_id
+     WHERE fs.fact_id = ?1
+     ORDER BY ev.ts ASC`,
+  )
+    .bind(id)
+    .all<{ event_id: string; ts: number; kind: string }>();
+
+  return json({ ...fact, sources });
 }
