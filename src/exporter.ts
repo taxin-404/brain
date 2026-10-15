@@ -3,6 +3,7 @@ import { contentHmac, decryptPayload, newEventId } from "./crypto";
 import type { Env } from "./env";
 import { json } from "./http";
 import { consumeConfirmToken, PurgeError } from "./purge";
+import { rebuildProjections } from "./rebuild";
 
 /** Export profiles (design §8 phase 6 + amendment 3): a chunked NDJSON job
  *  written to R2 and reachable only through a short-TTL HMAC-signed link.
@@ -55,6 +56,124 @@ const b64encode = (buf: ArrayBuffer): string => {
   for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
   return btoa(bin);
 };
+
+const b64decode = (b64: string): Uint8Array => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+
+// ---------------------------------------------------------------------------
+// Restore (design §8 phase 6, done-when): consume a backup-profile export and
+// rebuild the brain on a fresh account. Only PAYLOAD_KEK-protected material
+// is ever involved: payloads stay encrypted at rest; restore copies rows and
+// blobs verbatim and never needs the HMAC key (stored content_hmac values are
+// preserved as data — fidelity over re-derivation on a clean account).
+// ---------------------------------------------------------------------------
+
+const columnCache = new Map<string, Set<string>>();
+
+async function tableColumns(env: Env, table: string): Promise<Set<string>> {
+  const cached = columnCache.get(table);
+  if (cached) return cached;
+  const { results } = await env.BRAIN_DB.prepare(`PRAGMA table_info(${table})`).all<{ name: string }>();
+  const cols = new Set(results.map((r) => r.name));
+  columnCache.set(table, cols);
+  return cols;
+}
+
+const normalizeValue = (v: unknown): string | number | null =>
+  v === null || v === undefined ? null : typeof v === "boolean" ? (v ? 1 : 0) : (v as string | number);
+
+async function insertRows(env: Env, table: string, rows: Array<Record<string, unknown>>): Promise<number> {
+  const cols = await tableColumns(env, table);
+  const stmts: D1PreparedStatement[] = [];
+  for (const row of rows) {
+    const keys = Object.keys(row).filter((k) => /^[a-z_]+$/.test(k) && cols.has(k));
+    if (keys.length === 0) continue;
+    const sql = `INSERT OR REPLACE INTO ${table} (${keys.join(", ")}) VALUES (${keys.map((_, i) => `?${i + 1}`).join(", ")})`;
+    stmts.push(env.BRAIN_DB.prepare(sql).bind(...keys.map((k) => normalizeValue(row[k]))));
+  }
+  for (let i = 0; i < stmts.length; i += 50) await env.BRAIN_DB.batch(stmts.slice(i, i + 50));
+  return stmts.length;
+}
+
+export async function restoreFromJob(env: Env, job: string): Promise<{ status: number; body: unknown }> {
+  const metaObj = await env.BRAIN_RAW.get(metaKey(job));
+  if (!metaObj) return { status: 404, body: { error: "not_found" } };
+  const meta = (await metaObj.json()) as { profile?: string };
+  if (meta.profile !== "backup") {
+    return { status: 400, body: { error: "bad_request", message: "restore requires a backup-profile export" } };
+  }
+
+  const parts = (await env.BRAIN_RAW.list({ prefix: `exports/${job}/` })).objects
+    .filter((o) => PART_RE.test(o.key))
+    .sort((a, b) => a.key.localeCompare(b.key));
+  if (parts.length === 0) return { status: 404, body: { error: "not_found" } };
+
+  const restored: Record<string, number> = {};
+  const payloads: Array<{ key: string; b64: string }> = [];
+  let headerOk = false;
+
+  for (const part of parts) {
+    const obj = await env.BRAIN_RAW.get(part.key);
+    if (!obj) continue;
+    const text = await obj.text();
+    for (const line of text.split("\n")) {
+      if (!line) continue;
+      let item: { kind?: string; format?: string; version?: number; table?: string; rows?: Array<Record<string, unknown>> };
+      try {
+        item = JSON.parse(line);
+      } catch {
+        return { status: 400, body: { error: "bad_request", message: "corrupt export line" } };
+      }
+      if (item.kind === "header") {
+        if (item.format !== "brain-export" || item.version !== 1) {
+          return { status: 400, body: { error: "bad_request", message: "unsupported export format" } };
+        }
+        headerOk = true;
+        continue;
+      }
+      if (!headerOk || !item.table || !Array.isArray(item.rows)) continue;
+      if (item.table === "r2_payloads") {
+        for (const row of item.rows) {
+          if (typeof row.key === "string" && typeof row.b64 === "string") payloads.push({ key: row.key, b64: row.b64 });
+        }
+        continue;
+      }
+      // Unknown content tables are ignored (forward-compatible exports).
+      if (!(EXPORT_TABLES as readonly string[]).includes(item.table)) continue;
+      if (item.rows.length === 0) continue;
+      const n = await insertRows(env, item.table, item.rows);
+      restored[item.table] = (restored[item.table] ?? 0) + n;
+    }
+  }
+
+  let r2_payloads = 0;
+  for (const p of payloads) {
+    if (!p.key.startsWith("payloads/")) continue; // belt & braces: payload prefix only
+    await env.BRAIN_RAW.put(p.key, b64decode(p.b64));
+    r2_payloads += 1;
+  }
+
+  const { fts_rows } = await rebuildProjections(env);
+
+  await writeAudit(env.BRAIN_DB, {
+    actor: "user",
+    action: "restore",
+    targetType: "export",
+    targetId: job,
+    after: { restored, r2_payloads, fts_rows },
+    reason: "",
+  });
+
+  return { status: 200, body: { job, restored, r2_payloads, fts_rows } };
+}
+
+export async function handleRestore(request: Request, env: Env): Promise<Response> {
+  const body = (await request.json().catch(() => null)) as { job?: unknown } | null;
+  if (!body || typeof body.job !== "string" || !/^[A-Za-z0-9_-]{1,64}$/.test(body.job)) {
+    return json({ error: "bad_request", message: "job required" }, 400);
+  }
+  const out = await restoreFromJob(env, body.job);
+  return json(out.body, out.status);
+}
 
 export const exportLinkToken = (hmacKey: string, job: string, exp: number): Promise<string> =>
   contentHmac(hmacKey, `export:${job}:${exp}`);

@@ -142,15 +142,15 @@ Spec anchors that pin the behavior:
 **Files:** Modify `src/exporter.ts`, `src/index.ts`; create
 `test/eval-restore.test.ts`.
 
-- [ ] **Step 1: Tests** — seed a small brain (events incl. payload, facts,
+- [x] **Step 1: Tests** — seed a small brain (events incl. payload, facts,
   block, approved procedure, reflection) → backup export → **wipe every
   content table** (fresh account) → restore → `/v1/search` finds the fact
   (FTS rebuilt), `GET /v1/facts/:id` + `why` work, procedure approved with
   version history, reflection present, and the event payload decrypts using
   **only `PAYLOAD_KEK`**; restore is idempotent (second run = no duplicates).
-- [ ] **Step 2: Run and watch fail.**
-- [ ] **Step 3: Implement** restore + FTS rebuild.
-- [ ] **Step 4: Gate + commit** — `feat(export): restore + clean-account eval`.
+- [x] **Step 2: Run and watch fail.**
+- [x] **Step 3: Implement** restore + FTS rebuild.
+- [x] **Step 4: Gate + commit** — `feat(export): restore + clean-account eval`.
 
 ### Task 5 — inspector UI
 
