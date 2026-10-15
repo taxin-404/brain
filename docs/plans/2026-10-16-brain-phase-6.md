@@ -231,6 +231,24 @@ finished artifact.
 - [x] **Step 3: Implement** `header` flag in meta.
 - [x] **Step 4: Gate + commit** — `fix(export): single header across sliced walks`.
 
+### Task 10 — deletion order + resilience (acceptance fix)
+
+**Found during live acceptance:** a portable artifact survived its first full
+read once (partial delete; a later download then served fragments). The
+mechanism itself works (a clean full read → immediate 404), but the delete
+loop had no failure isolation and deleted meta LAST — the combination can
+serve a half-deleted artifact on retry. Fix: delete `meta.json` FIRST (any
+retry/restore after that point 404s instead of serving fragments) and
+try/catch each part delete (sweep is the backstop).
+
+**Files:** Modify `src/exporter.ts`; extend `test/export.test.ts`.
+
+- [ ] **Step 1: Test** — inject part-delete failures: download still serves the
+  full artifact; a second download 404s (meta gone) even though parts remain.
+- [ ] **Step 2: Run and watch fail.**
+- [ ] **Step 3: Implement** meta-first + per-key try/catch.
+- [ ] **Step 4: Gate + commit** — `fix(export): meta-first portable deletion`.
+
 ## Merge + acceptance (closing — one push)
 
 - [x] Merge `phase-6` → `master`, push (done `71a455d`); CI build `5ad08322…` success.
