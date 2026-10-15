@@ -1,8 +1,8 @@
 import type { Env } from "./env";
-import { writeAudit } from "./audit";
 import { embedPendingFacts } from "./embed";
 import { resolveSubject } from "./entities";
-import { newFactId, normalizeCandidates, type SourceActor, type SourceContext } from "./facts";
+import { confirmFact, createFact } from "./factstore";
+import { normalizeCandidates, type SourceActor, type SourceContext } from "./facts";
 import { json } from "./http";
 import { EXTRACTION_MODEL, geminiJson, LlmError } from "./llm";
 import { FACT_EXTRACTION_PROMPT } from "./prompts";
@@ -127,57 +127,20 @@ export async function processExtractions(
           .bind(subject.id, fact.predicate, fact.objectText)
           .first<{ id: string }>();
         if (existing) {
-          await db.prepare(`UPDATE facts SET last_confirmed_at = ?1 WHERE id = ?2`).bind(now, existing.id).run();
-          await db
-            .prepare(`INSERT OR IGNORE INTO fact_sources (fact_id, event_id) VALUES (?1, ?2)`)
-            .bind(existing.id, fact.eventId)
-            .run();
+          await confirmFact(env, existing.id, fact.eventId, now);
         } else {
-          const factId = newFactId();
-          await db
-            .prepare(
-              `INSERT INTO facts (id, subject_id, predicate, object_text, fact_kind, confidence, status,
-                                  valid_at, expires_at, learned_at, first_seen_at, last_confirmed_at,
-                                  sensitivity, source_event_id, embedding_model)
-               VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'active', ?7, ?8, ?9, ?9, ?9, ?10, ?11, 'gemini-embedding-001')`,
-            )
-            .bind(
-              factId,
-              subject.id,
-              fact.predicate,
-              fact.objectText,
-              fact.factKind,
-              fact.confidence,
-              fact.validAt ?? null,
-              fact.expiresAt ?? null,
-              now,
-              fact.sensitivity,
-              fact.eventId,
-            )
-            .run();
-          // facts_fts is external-content with no triggers (0002): index manually
-          await db
-            .prepare(`INSERT INTO facts_fts(rowid, object_text) SELECT rowid, object_text FROM facts WHERE id = ?1`)
-            .bind(factId)
-            .run();
-          await db
-            .prepare(`INSERT OR IGNORE INTO fact_sources (fact_id, event_id) VALUES (?1, ?2)`)
-            .bind(factId, fact.eventId)
-            .run();
-          await writeAudit(db, {
-            actor: "system",
-            action: "create",
-            targetType: "fact",
-            targetId: factId,
-            after: {
-              subject: fact.subject,
-              predicate: fact.predicate,
-              object: fact.objectText,
-              fact_kind: fact.factKind,
-              confidence: fact.confidence,
-              sensitivity: fact.sensitivity,
-              event_id: fact.eventId,
-            },
+          await createFact(env, {
+            subjectId: subject.id,
+            subjectName: subject.name,
+            predicate: fact.predicate,
+            objectText: fact.objectText,
+            factKind: fact.factKind,
+            confidence: fact.confidence,
+            validAt: fact.validAt,
+            expiresAt: fact.expiresAt,
+            sensitivity: fact.sensitivity,
+            sourceEventId: fact.eventId,
+            now,
           });
           run.facts += 1;
           perEvent.set(fact.eventId, (perEvent.get(fact.eventId) ?? 0) + 1);

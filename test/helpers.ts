@@ -81,7 +81,10 @@ export function installFakeVectorize(): Map<string, StoredVector> {
         .sort((a, b) => b.score - a.score);
       return { matches: scored.slice(0, options?.topK ?? 10) };
     },
-    deleteByIds: async () => ({ mutationId: "test" }),
+    deleteByIds: async (ids: string[]) => {
+      for (const id of ids) store.delete(id);
+      return { mutationId: "test" };
+    },
     describe: async () => ({ name: "fake", config: {}, vectorsCount: store.size }),
   };
   (env as unknown as Record<string, unknown>).VECTORIZE = index as unknown as VectorizeIndex;

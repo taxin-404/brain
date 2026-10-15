@@ -143,17 +143,17 @@ you can also push") before execution; the ledger records it.
     on failure logs, leaves row as-is (a stale vector is harmless — search
     filters by D1 status).
 
-- [ ] **Step 1: Write failing tests** — `createFact` inserts row+FTS (`SELECT
+- [x] **Step 1: Write failing tests** — `createFact` inserts row+FTS (`SELECT
   count(*) FROM facts_fts WHERE object_text MATCH ...` via the fact's rowid),
   source link, `create` audit row; `confirmFact` bumps `last_confirmed_at` and
   dedupes source links; `deleteFactVector` removes the fake-index entry and
   NULLs `vec_id`.
-- [ ] **Step 2: Run and watch them fail** (`npx vitest run test/factstore.test.ts`).
-- [ ] **Step 3: Implement** `src/factstore.ts`; extend `test/helpers.ts` with
+- [x] **Step 2: Run and watch them fail** (`npx vitest run test/factstore.test.ts`).
+- [x] **Step 3: Implement** `src/factstore.ts`; extend `test/helpers.ts` with
   the idempotent `deleteByIds`.
-- [ ] **Step 4: Refactor `src/extract.ts` step 4** to call `createFact` /
+- [x] **Step 4: Refactor `src/extract.ts` step 4** to call `createFact` /
   `confirmFact` (no behavior change; existing `extract.test.ts` must stay green).
-- [ ] **Step 5: Gate + commit** — `npx vitest run` + `npx tsc --noEmit`;
+- [x] **Step 5: Gate + commit** — `npx vitest run` + `npx tsc --noEmit`;
   commit `feat(store): single fact write path (factstore) + extract refactor`.
 
 ### Task 2 — Graph: alias learning, object→entity links, edges, `GET /v1/entities/:id`
