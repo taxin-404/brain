@@ -1,0 +1,11 @@
+# Local development values for `npx wrangler dev`.
+#
+# Copy to `.dev.vars` (gitignored) — these are intentionally fake, public
+# values; production secrets go in via `wrangler secret put` (see docs/setup.md).
+PAYLOAD_KEK="dev-kek"
+CONTENT_HMAC_KEY="dev-hmac"
+MCP_READ_TOKEN="dev-read"
+MCP_PROPOSE_TOKEN="dev-propose"
+ADMIN_TOKEN="dev-admin"
+GEMINI_API_KEY="dev-gemini"
+AI_GATEWAY_BASE="https://gw.test/google-ai-studio"
