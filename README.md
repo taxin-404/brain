@@ -371,6 +371,9 @@ builds.
   `/tmp/opencode/brain-capture-diag.log` — plugin console output is invisible in
   server logs. Live E2E without touching global config: a project-local
   `opencode.json` with the plugin entry in a scratch dir (see `task-14-log.md`).
-- Registered globally (owner-approved 2026-10-15): the capture plugin and the
-  `brain` MCP server (recall / get_blocks / health_report / remember) live in
+- Registered globally (owner-approved 2026-10-15; propose connection added
+  2026-10-16): the capture plugin and the `brain` MCP servers live in
   `~/.config/opencode/opencode.json` — every session captures automatically.
+  Two MCP entries share `/mcp`: `brain` (MCP_READ token — recall / get_blocks /
+  health_report) and `brain-propose` (MCP_PROPOSE token — remember + propose_*).
+  Read tools accept either token; writes require MCP_PROPOSE.
