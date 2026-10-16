@@ -99,3 +99,25 @@ record.
     — success (both jobs); Workers Builds
     `27843d1d-8ae0-458a-98ce-e9f593bd435b` — build + deploy success,
     `"success":true`, freshness-checked.
+- 2026-10-16: owner flagged that the setup guide was missing the Workers
+  dashboard import flow (screenshots: *Workers & Pages → Create → Continue
+  with GitHub → Select a repository → Set up your application*). Action taken:
+  - `docs/setup.md` §6 rewritten — path A (fresh import) with exact field
+    values: project name must equal the wrangler `name` (`brain-api`; the
+    form pre-fills the repo name `brain`), build command `npm ci && npm test`,
+    deploy command `npx wrangler deploy --env=""`, preview command default,
+    **Enable Preview builds OFF**, Cloudflare Access OFF; note that
+    `secrets.required` fails the first deploy loudly until §3 secrets exist
+    (intended — set them and re-run); path B (existing worker → Settings →
+    Builds) kept.
+  - `docs/engineering.md`: stale "5 secrets" corrected to the six required
+    (adds `GEMINI_API_KEY`, matching `wrangler.jsonc`).
+  - CHANGELOG `[Unreleased]` → Added.
+  - Account check while writing: workers list = `brain-api`, `gdrive`,
+    `nodewarden`, `responsive-web-design`, `terabox` — the owner's dashboard
+    walk-through created no stray `brain` worker.
+  - Pushed as `0c88e16` (`6f79692..0c88e16`). Verification: GitHub Actions
+    run [38872780546](https://github.com/taxin-404/brain/actions/runs/38872780546)
+    — success (both jobs); Workers Builds
+    `361b0a16-1b51-4b59-92d1-53c0bae47454` — 236/236 tests, build + deploy
+    success, `"success":true` (version `5f423e5e-59bc-4402-8742-8a31b3d25133`).
