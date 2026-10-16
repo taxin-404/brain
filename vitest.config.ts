@@ -9,6 +9,9 @@ export default defineConfig(async () => {
       cloudflareTest({
         wrangler: { configPath: "./wrangler.jsonc" },
         miniflare: {
+          // Migration-free D1 for bootstrap tests (test/migrations.test.ts):
+          // exercises a genuine first boot without touching the migrated DB.
+          d1Databases: ["MIGRATION_DB"],
           bindings: {
             PAYLOAD_KEK: "dev-kek",
             CONTENT_HMAC_KEY: "dev-hmac",

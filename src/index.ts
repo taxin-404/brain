@@ -1,5 +1,6 @@
 import type { Env, Need, Scope } from "./env";
 import { resolveScope, requireScope } from "./auth";
+import { ensureSchema } from "./bootstrap";
 import { json } from "./http";
 import { healthReport } from "./health";
 import { handleEvents } from "./ingest";
@@ -220,6 +221,12 @@ export function routeCron(cron: string): CronJob | null {
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    try {
+      await ensureSchema(env.BRAIN_DB);
+    } catch (error) {
+      console.log(`[bootstrap] schema bootstrap failed: ${String(error)}`);
+      return new Response("server not ready: schema bootstrap failed", { status: 503 });
+    }
     const { pathname } = new URL(request.url);
     for (const route of ROUTES) {
       if (route.method !== request.method) continue;
@@ -242,6 +249,7 @@ export default {
     ctx.waitUntil(
       (async () => {
         try {
+          await ensureSchema(env.BRAIN_DB);
           switch (job) {
             case "sweep":
               await runSweep(env);

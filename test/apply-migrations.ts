@@ -1,4 +1,8 @@
 import { env } from "cloudflare:workers";
-import { applyD1Migrations } from "cloudflare:test";
+import { ensureSchema } from "../src/bootstrap";
 
-await applyD1Migrations(env.BRAIN_DB, env.TEST_MIGRATIONS);
+// Boot the schema through the Worker's real runtime path — the same code a
+// fresh fork runs at its first request — instead of the plugin's
+// applyD1Migrations. Storage is fresh per test file, so every file exercises a
+// virgin-database boot; test/migrations.test.ts pins the details.
+await ensureSchema(env.BRAIN_DB);
