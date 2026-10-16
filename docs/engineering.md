@@ -270,6 +270,9 @@ additionally run the same suite on GitHub Actions
 live.
 
 - **Build command:** `npm ci && npm test` — a red test suite blocks the deploy.
+- **Build runners can spike slower than local runs.** The export CPU-ceiling
+  tests carry a 20 s per-test timeout — the 5 s default flaked on 2026-10-16
+  and failed the build command, blocking the deploy.
 - **Deploy command:** `npx wrangler deploy --env=""` — the trailing `--env=""`
   targets the top-level config on purpose: `env` blocks do **not** inherit
   bindings, so `--env prod` would deploy a worker with zero D1/R2 bindings.

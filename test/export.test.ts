@@ -293,6 +293,7 @@ describe("export — resumable jobs (free-plan subrequest ceiling)", () => {
 
   it("pages the table walk across invocations (CPU ceiling)", async () => {
     // >400 event rows: 10 ms CPU/invocation cannot stringify whole tables.
+    // A build-runner spike flaked the 5 s default once (2026-10-16); 20 s slack.
     const batch: EventInput[] = Array.from({ length: 405 }, (_, i) => ({
       source: "manual",
       actor: "user",
@@ -351,12 +352,13 @@ describe("export — resumable jobs (free-plan subrequest ceiling)", () => {
     for (const id of ids) seen.set(id, (seen.get(id) ?? 0) + 1);
     for (const id of seeded) expect(seen.get(id)).toBe(1);
     for (const n of seen.values()) expect(n).toBe(1);
-  });
+  }, 20000);
 
   it("caps backup payload pages even when ?limit=500 is requested (CPU ceiling)", async () => {
     // ?limit=500 used to flow straight into the payload page: b64encoding 500
     // objects (~2.5 MB) breaches the 10 ms CPU ceiling (live 1102-class
     // failures). A backup page must clamp to BACKUP_PAYLOAD_PAGE (200).
+    // Same build-runner slack as the walk test above.
     const batch: EventInput[] = Array.from({ length: 205 }, (_, i) => ({
       source: "manual",
       actor: "user",
@@ -397,7 +399,7 @@ describe("export — resumable jobs (free-plan subrequest ceiling)", () => {
     expect(view.done).toBe(true);
     // A full clamped page still ships (200 rows), but never more.
     expect(maxPayloadDelta).toBe(200);
-  });
+  }, 20000);
 
   it("refreshes the link TTL on every resume (slow walks outlive any single window)", async () => {
     // 200 sequential R2 gets per payload page make multi-thousand-payload
