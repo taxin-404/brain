@@ -173,11 +173,12 @@ Steps:
 5. Prod prep (single-shot, ledgered — not repo changes): Builds API — GET
    `/builds/workers/$TAG/triggers`, PATCH `/builds/triggers/$TRIGGER`
    `deploy_command` → `npm run deploy` (verified 2026-10-16; note the update
-   path has no `/workers/$TAG` segment). `AI_GATEWAY_BASE` secret put comes
-   AFTER the push deploy: `10053` rejects it while the plain-text var is live,
-   and the deploy is what removes the var (the new direct-Google fallback
-   covers the short window). Rollback if the push build fails: PATCH back to
-   `npx wrangler deploy --env=""`, re-trigger.
+   path has no `/workers/$TAG` segment). `AI_GATEWAY_BASE` var→secret, **as
+   executed**: `keep_vars: true` keeps the stale config var through the push
+   deploy (settings read confirmed `plain_text`), so run one local
+   `keep_vars:false` deploy to drop it, then `secret put` (`10053` guards the
+   ordering; the direct-Google fallback covers the window). Rollback if the
+   push build fails: PATCH back to `npx wrangler deploy --env=""`, re-trigger.
 6. Gate + commits: `feat(deploy): provision the Vectorize index before deploy`
    (script + package.json), `chore(config): bind D1 by name and drop the
    owner-specific gateway var` (wrangler.jsonc).

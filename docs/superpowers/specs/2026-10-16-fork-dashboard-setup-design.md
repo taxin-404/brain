@@ -43,10 +43,11 @@ up; prod resources verified untouched. Full detail:
 - Remove `vars.AI_GATEWAY_BASE` — the value embeds the **owner's** account id
   and must not be inherited by forks. `AI_GATEWAY_BASE` becomes optional
   everywhere (decision 4). Prod keeps the gateway via a worker secret.
-  Ordering matters: Cloudflare rejects `secret put` while a plain-text binding
-  with the same name is live (`10053`) — the var leaves with the deploy, the
-  secret lands immediately after (the new direct-Google fallback covers the
-  short window; verified live 2026-10-16).
+  Ordering, **as executed live** (2026-10-16): `keep_vars: true` means the stale
+  config var *survives* the push deploy, and `secret put` is rejected with
+  `10053` while any plain-text binding of that name is live — so prod dropped
+  the var with a one-off `keep_vars:false` deploy, then `secret put` succeeded.
+  The direct-Google fallback covered the (short) window.
 - Keep `secrets.required` and the `--env=""` deploy semantics. The red first
   build (`Missing required secrets: …`) is the deliberate, documented fork step:
   paste the six secrets in **Settings → Variables and Secrets**, click

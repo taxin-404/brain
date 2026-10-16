@@ -293,14 +293,19 @@ live.
   (`AI_GATEWAY_BASE` is a secret now).
 - **Secrets survive deploys** (worker-level, never touched by a deploy):
   `PAYLOAD_KEK`, `CONTENT_HMAC_KEY`, `MCP_READ_TOKEN`, `MCP_PROPOSE_TOKEN`,
-  `ADMIN_TOKEN`, `GEMINI_API_KEY` (+ optional `AI_GATEWAY_BASE`). `keep_vars: true`
-  additionally protects dashboard-set plain-text vars, and `secrets.required` in
+  `ADMIN_TOKEN`, `GEMINI_API_KEY` (+ `AI_GATEWAY_BASE`). `secrets.required` in
   `wrangler.jsonc` makes a deploy *fail loudly* if any of the six required
   secrets is missing — the fork flow leans on this (red first build → paste six
   secrets → **Retry deployment**). Symptom of one deleted later: every
-  authenticated route 401s. Gotcha: `secret put` is rejected with `10053` while a
-  plain-text binding of the same name is live — the deploy must remove the var
-  first (how prod's `AI_GATEWAY_BASE` moved config-var → secret on 2026-10-16).
+  authenticated route 401s.
+- **`keep_vars: true` protects plain-text vars** that are not in
+  `wrangler.jsonc` — including vars the config *used to* set: removing a var
+  from the config does **not** remove it from the worker (observed live
+  2026-10-16 with `AI_GATEWAY_BASE`). To drop such a var, deploy once with
+  `keep_vars: false`. Gotcha: `secret put` is rejected with `10053` while a
+  plain-text binding of the same name is live — that ordering is how prod moved
+  `AI_GATEWAY_BASE` from config var to secret (var-removal deploy, then
+  `secret put`).
 - **Preview builds are intentionally NOT configured** — previews would run
   against the same prod D1/R2; there is no preview isolation yet.
 - **Push-triggered builds go silent if the GitHub App loses repo access.** The
