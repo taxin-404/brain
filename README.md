@@ -248,6 +248,7 @@ inspector.
 | [`.superpowers/sdd/2026-10-16-brain-phase-6/progress.md`](.superpowers/sdd/2026-10-16-brain-phase-6/progress.md) | Phase 6 ledger — rulings + gotchas |
 | `.superpowers/sdd/2026-10-15-brain-phase-0-1/task-N-brief.md` | Per-task briefs (interfaces, verbatim tests) |
 | [`docs/key-rotation.md`](docs/key-rotation.md) | PAYLOAD_KEK rotation procedure |
+| [`docs/setup.md`](docs/setup.md) | From-zero setup — resources, secrets, deploy, client wiring, verification, troubleshooting |
 
 ## Layout
 
@@ -256,10 +257,10 @@ src/            Worker source — routes, auth, crypto, redact, budget, ingest,
                 purge, audit, rebuild (FTS5), search, blocks, mcp, sweep,
                 extract, factstore, graph, review, consolidate, reflect,
                 procedures, health, connector-github, exporter, inspector
-migrations/     D1 schema 0001–0005 (wrangler d1 migrations apply)
+migrations/     D1 schema 0001–0006 (wrangler d1 migrations apply)
 test/           vitest suite (@cloudflare/vitest-plugin, D1 via miniflare)
 plugin/         OpenCode capture plugin — event-sourced capture + diagnostics (Tasks 13–14)
-docs/           spec + plan + key rotation
+docs/           spec + plans + setup guide + key rotation
 wrangler.jsonc  Worker config: D1 brain-db, R2 brain-raw, crons (*/30 sweep,
                 nightly consolidation, weekly/monthly reflections),
                 keep_vars + secrets.required (see Deploy & CI)
@@ -282,7 +283,7 @@ live in `vitest.config.ts` miniflare bindings — the suite runs from a fresh cl
 ## Ops facts
 
 - Worker `brain-api` → `https://brain-api.taxin-404.workers.dev` (deployed)
-- D1 `brain-db` + R2 `brain-raw` live (APAC region), 5/5 remote migrations applied
+- D1 `brain-db` + R2 `brain-raw` live (APAC region), 6/6 remote migrations applied
 - Prod secrets set via `wrangler secret put`; values escrowed out-of-band, **never in the repo**
 - Crons: `*/30` sweep + nightly consolidation (`0 3 * * *`) + weekly/monthly reflections (`0 4 * * 1` / `0 4 1 * *`)
 
