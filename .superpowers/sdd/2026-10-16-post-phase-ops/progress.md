@@ -50,3 +50,22 @@ Discrimination method (keep for ops): `wrangler r2 object get <bucket>/<key> --l
 - Teardown complete: drill worker/D1/Vectorize deleted; drill R2 bucket emptied (2,034 deletes) + deleted; `.secrets/drill.env` removed; local sim state cleaned. `wrangler.drill.jsonc` kept (gitignored template).
 - CI: master builds green through `b218f60` (carries `9b3d627` race fix, `6f1cf8d` F1 clamp, `4777823` TTL renewal).
 - Remaining (owner-only): GCP budget alert; rotate the chat-pasted Google key + revoke unrecognized `cfut_` tokens; KEK escrow of `.secrets/prod.env`, then delete the local copy.
+
+## Dashboard errors triage — 37/37 historical dev-era, zero since (2026-10-16)
+Owner flagged the brain-api dashboard: "4k requests, 37 errors". Investigation (systematic-debugging; evidence-first, no guessing):
+- **Analytics** (GraphQL `workersInvocationsAdaptive`, 3-day window Oct 13 04:52Z → Oct 16 05:52Z): 3,973 requests = 3,934 success + **37 errors** (19 `scriptThrewException` + 18 `exceededResources`) + 2 `clientDisconnected` (aborts, not errors). Matches the dashboard exactly.
+- **Timeline**: all 37 errors fall in Oct 15 12:42Z → Oct 15 23:37Z (= Oct 15 18:42 → Oct 16 05:37 local) — the single-sitting build-out night. **Zero errors since** (5.5h+, spanning the entire loop-injection/repair/DR-drill/live-check era — the heaviest real traffic yet).
+- **Per-window correlation** (opencode.log shell commands ± local, git commit times):
+  - 18:42–18:46 local (12:42–12:46Z): plugin v1 ingest dev — live crafted-batch curls during plugin/serialization debugging.
+  - 20:27 (14:27Z): CI-webhook era probe (commit `docs(ci)` at 20:27:33 local, 12 s later).
+  - 21:12 + 21:37 (15:12/15:37Z): phase-2 Gemini client + embeddings live tests (era commits 21:15/21:35).
+  - 23:07–23:53 (17:07–17:53Z): phase-2/3/4 live acceptance — `why`/review-undo probes, factstore, crons, health probes; windows show the probe batteries in opencode.log.
+  - 00:26 + 00:32 (18:26/18:32Z): phase-5 procedures era + phase-6 kickoff (probe batteries; vitest/ledger lines adjacent).
+  - 01:09–01:17 (19:09–19:17Z): phase-6 resumable export dev — `wrangler tail` + acc6 export probes (that era even ran its own tail capture).
+  - **01:38:49–01:40:25 (19:38:49–19:40:25Z): 15+1+1 `exceededResources`** — the export CPU-ceiling discovery burst (python probe scripts hammering export pages; crypto/KEK greps immediately after); fixed by `slice tables + hoist KEK` (01:48) → later F1 clamp.
+  - 01:59 (19:59Z): export single-header era; fixed 02:01.
+  - 02:15 (20:15Z): 1 `exceededResources` during portable-deletion testing; fixed meta-first at 02:20.
+  - 05:37 local (23:37:39Z): last error — Gemini flash-lite availability probing; fallback fix `7ba7c76` landed 3 min later.
+- **Current-state proofs**: post-fix plugin diag log (from 03:15Z) = 436 `ingest_ok` / 0 errors; `ingest.ts` race-safe (claim-before-put, all `INSERT OR IGNORE`); full suite 236/236 + tsc clean; post-repair export + R2 byte-gate + DR drill all green (above).
+- **Verdict: no live defect.** Every error is a dev-era artifact whose class got fixed that same night/morning; each fix has a commit + regression test. The dashboard's 3-day rolling window will decay to 0 by ~Oct 19 on its own; nothing to repair.
+- Tooling note for future forensics: the Workers Observability telemetry query API needs "Workers Observability Write" — absent from the wrangler OAuth scopes (fresh login re-verified) and from `CF_BUILDS_TOKEN` (403 both). Historical request logs are therefore not retrievable with current credentials; GraphQL analytics works via OAuth, and `wrangler tail` is the live-capture path. Optional owner-only item: mint an API token with Workers Observability Write if historical log retrieval is ever wanted.
