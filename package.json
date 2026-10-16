@@ -67,7 +67,7 @@
   "type": "module",
   "scripts": {
     "test": "vitest run",
-    "deploy": "wrangler deploy --env=\"\"",
+    "deploy": "node scripts/ensure-vectorize.mjs && wrangler deploy --env=\"\"",
     "migrations:embed": "node scripts/embed-migrations.mjs",
     "eval:live": "node scripts/eval-live.mjs"
   },
