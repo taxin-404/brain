@@ -15,15 +15,18 @@
     "required": ["PAYLOAD_KEK", "CONTENT_HMAC_KEY", "MCP_READ_TOKEN", "MCP_PROPOSE_TOKEN", "ADMIN_TOKEN", "GEMINI_API_KEY"]
   },
 
-  "d1_databases": [{ "binding": "BRAIN_DB", "database_name": "brain-db", "database_id": "4d7130e8-65aa-4558-985e-96d38db38b30" }],
+  // Id-less on purpose: on a fresh account the deploy auto-provisions `brain-db`
+  // (and `brain-raw` below) under these exact names; on existing accounts the
+  // binding re-links by name. A `database_id` would pin the owner's account, so
+  // forks must never carry one.
+  "d1_databases": [{ "binding": "BRAIN_DB", "database_name": "brain-db" }],
   "r2_buckets": [{ "binding": "BRAIN_RAW", "bucket_name": "brain-raw" }],
   "vectorize": [{ "binding": "VECTORIZE", "index_name": "brain-memory" }],
-  // Gemini extraction/embeddings travel through AI Gateway; the provider key stays
-  // in the GEMINI_API_KEY secret (pass-through x-goog-api-key). The account id in
-  // the URL is already public in the README CI section.
-  "vars": {
-    "AI_GATEWAY_BASE": "https://gateway.ai.cloudflare.com/v1/1ce49401e2d9c63449f7621e4f5e10e9/brain/google-ai-studio"
-  },
+  // AI_GATEWAY_BASE is optional (unset = Gemini calls go straight to Google).
+  // Set it in the dashboard (Settings → Variables and Secrets) to route through
+  // your AI Gateway. Unlike D1/R2, a missing Vectorize binding fails the deploy
+  // (error 10159) — scripts/ensure-vectorize.mjs, chained into `npm run deploy`,
+  // creates the index + metadata indexes first.
   // Four of the five free cron slots: 30-min sweep, nightly consolidation,
   // weekly reflection (Mon 04:00), monthly reflection (1st 04:00).
   "triggers": { "crons": ["*/30 * * * *", "0 3 * * *", "0 4 * * 1", "0 4 1 * *"] },

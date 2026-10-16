@@ -170,11 +170,14 @@ Steps:
 4. `wrangler.jsonc`: drop `database_id`; remove the `vars` block; refresh the
    deploy comments. Validate: `npx wrangler deploy --dry-run --env=""` parses
    and bundles.
-5. Prod prep (single-shot, ledgered — not repo changes): extract the current
-   gateway URL from `wrangler.jsonc` (never echoed) →
-   `wrangler secret put AI_GATEWAY_BASE`; Builds API: GET the trigger, PATCH
-   `deploy_command` → `npm run deploy`, GET to confirm. Rollback if the push
-   build fails: PATCH back to `npx wrangler deploy --env=""`, re-trigger.
+5. Prod prep (single-shot, ledgered — not repo changes): Builds API — GET
+   `/builds/workers/$TAG/triggers`, PATCH `/builds/triggers/$TRIGGER`
+   `deploy_command` → `npm run deploy` (verified 2026-10-16; note the update
+   path has no `/workers/$TAG` segment). `AI_GATEWAY_BASE` secret put comes
+   AFTER the push deploy: `10053` rejects it while the plain-text var is live,
+   and the deploy is what removes the var (the new direct-Google fallback
+   covers the short window). Rollback if the push build fails: PATCH back to
+   `npx wrangler deploy --env=""`, re-trigger.
 6. Gate + commits: `feat(deploy): provision the Vectorize index before deploy`
    (script + package.json), `chore(config): bind D1 by name and drop the
    owner-specific gateway var` (wrangler.jsonc).
