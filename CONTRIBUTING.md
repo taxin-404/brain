@@ -55,12 +55,12 @@ verification).
 | Path | What lives there |
 | --- | --- |
 | `src/` | Worker source: routes, auth, crypto, redaction, budget, ingest, purge, FTS, search, MCP, sweep, extraction, factstore, graph, review, consolidation, reflections, procedures, connectors, exporter, inspector |
-| `migrations/` | D1 schema (`wrangler d1 migrations apply`) |
+| `migrations/` | D1 schema — embedded at build (`npm run migrations:embed`) and applied by the runtime bootstrap on first request; `wrangler d1 migrations apply` still interoperates |
 | `test/` | Vitest suite; `eval-*.test.ts` are the design-doc gates |
 | `plugin/` | OpenCode capture plugin — standalone npm project with its own suite and lockfile |
 | `docs/` | Design spec, phase plans, setup guide, key rotation, DR drill, maintenance |
 | `eval/` | JSON fixtures for the eval tests |
-| `scripts/` | `eval-live.mjs` — owner-run, single-shot live harness |
+| `scripts/` | `eval-live.mjs` — owner-run, single-shot live harness · `ensure-vectorize.mjs` — deploy-time Vectorize provisioning |
 | `.github/` | CI workflow, issue/PR templates, Dependabot |
 | `.superpowers/sdd/` | Progress ledgers — append-only history of rulings |
 
@@ -70,8 +70,8 @@ verification).
 - CI runs the full suite and typecheck on every PR (GitHub Actions, no
   secrets, nothing live) — keep it green.
 - **Merging to `master` deploys the live worker.** Cloudflare Workers Builds
-  runs `npm ci && npm test` and deploys only on a green suite. Treat `master`
-  as production.
+  runs `npm ci && npm test`, then `npm run deploy` (Vectorize provisioning +
+  wrangler deploy) only on a green suite. Treat `master` as production.
 - Releases are tagged `vX.Y.Z` with notes in [CHANGELOG.md](CHANGELOG.md) —
   the process and the related-project sync story live in
   [`docs/maintenance.md`](docs/maintenance.md).

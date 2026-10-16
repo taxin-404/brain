@@ -17,7 +17,7 @@ a reference — yours will differ where marked.
 | D1 | `brain-db` (binding `BRAIN_DB`) |
 | R2 | `brain-raw` (binding `BRAIN_RAW`) |
 | Vectorize | `brain-memory` — 768 dims, cosine, metadata indexes on `type`/`status`/`sensitivity` |
-| AI Gateway | id `brain`, provider path `google-ai-studio` |
+| AI Gateway | id `brain` — optional; this deployment routes through it via the `AI_GATEWAY_BASE` secret |
 | Schema | migrations `0001`–`0006` |
 | Secrets | `PAYLOAD_KEK`, `CONTENT_HMAC_KEY`, `MCP_READ_TOKEN`, `MCP_PROPOSE_TOKEN`, `ADMIN_TOKEN`, `GEMINI_API_KEY` |
 | Crons | `*/30` sweep · `0 3 * * *` consolidation · `0 4 * * 1` weekly · `0 4 1 * *` monthly |
@@ -43,14 +43,21 @@ you are in the repo root.
 
 ## 1. Provision Cloudflare resources
 
+Mostly automatic: `npm run deploy` (§4) provisions these into your account on
+the first run — **and no IDs are pasted into `wrangler.jsonc`, by design, so
+forks can never inherit someone else's account.**
+
+- D1 `brain-db` — the id-less binding auto-creates it (or re-links it by name)
+- R2 `brain-raw` — same
+- Vectorize `brain-memory` (768 dims, cosine) + the `type`/`status`/`sensitivity`
+  string metadata indexes — `scripts/ensure-vectorize.mjs` creates these before
+  every deploy, because Vectorize (unlike D1/R2) is **not** auto-provisioned and
+  a missing index fails the deploy with error 10159
+
+To pre-create the Vectorize pieces by hand instead (or if your build token lacks
+Vectorize permission):
+
 ```bash
-# 1. D1 — then paste the printed database_id into wrangler.jsonc (d1_databases[0].database_id)
-npx wrangler d1 create brain-db
-
-# 2. R2
-npx wrangler r2 bucket create brain-raw
-
-# 3. Vectorize + the three filter metadata indexes
 npx wrangler vectorize create brain-memory --dimensions=768 --metric=cosine
 for p in type status sensitivity; do
   npx wrangler vectorize create-metadata-index brain-memory --property-name="$p" --type=string
@@ -58,25 +65,32 @@ done
 # index mutations are async — re-run this until all three appear in the listing:
 npx wrangler vectorize list-metadata-index brain-memory
 # (older wrangler spellings may use --propertyName)
-
-# 4. AI Gateway — dashboard: AI → AI Gateway → Create gateway, id `brain`
-#    (or with a management token: POST https://api.cloudflare.com/client/v4/accounts/<account_id>/ai-gateway/gateways  body: {"id":"brain","name":"brain"})
 ```
 
-`wrangler.jsonc` edits for your account:
+**Optional — AI Gateway.** Dashboard: AI → AI Gateway → Create gateway, id
+`brain`, then add `AI_GATEWAY_BASE` on the Worker (Settings → Variables and
+Secrets) with value
+`https://gateway.ai.cloudflare.com/v1/<account_id>/brain/google-ai-studio`
+(agent path: `POST https://api.cloudflare.com/client/v4/accounts/<account_id>/ai-gateway/gateways`
+body `{"id":"brain","name":"brain"}`). Leave it unset and Gemini calls go
+straight to Google — everything else is identical.
 
-| Field | What to put |
-| --- | --- |
-| `d1_databases[0].database_id` | the id from step 1 |
-| `vars.AI_GATEWAY_BASE` | `https://gateway.ai.cloudflare.com/v1/<account_id>/brain/google-ai-studio` |
-| `name` (optional) | keep `brain-api` — worker names are account-scoped; only change for clarity |
+## 2. The schema — no step needed
 
-Leave the rest alone: binding names, crons, and the `env` stubs (inert — see §4).
-
-## 2. Apply the schema
+The migrations (`0001`–`0006`) are embedded into the worker at build time and
+applied atomically on the first request (and on cron ticks), recorded in the
+standard `d1_migrations` table:
 
 ```bash
-npx wrangler d1 migrations apply brain-db --remote    # expect 0001–0006
+# confirm after the first request (informational)
+npx wrangler d1 execute brain-db --remote --command "SELECT name FROM d1_migrations"
+```
+
+`wrangler d1 migrations apply` stays interoperable — same table, same names —
+so the CLI path still works if you prefer applying by hand:
+
+```bash
+npx wrangler d1 migrations apply brain-db --remote    # optional; identical result
 # local dev only: drop --remote (or use --local together with `wrangler dev`)
 ```
 
@@ -89,7 +103,7 @@ npx wrangler d1 migrations apply brain-db --remote    # expect 0001–0006
 | `MCP_READ_TOKEN` | read scope — REST reads + the `brain` MCP connection | `openssl rand -hex 32` |
 | `MCP_PROPOSE_TOKEN` | propose scope — capture-plugin ingest + `brain-propose` MCP writes | `openssl rand -hex 32` |
 | `ADMIN_TOKEN` | owner key — apply/discard, exports, purge, manual kicks | `openssl rand -hex 32` |
-| `GEMINI_API_KEY` | Google AI Studio key (sent through the gateway) | AI Studio console |
+| `GEMINI_API_KEY` | Google AI Studio key (sent through your AI Gateway when `AI_GATEWAY_BASE` is set) | AI Studio console |
 | `GITHUB_TOKEN` | *optional* — GitHub activity connector (raises rate limits) | GitHub → Developer settings → PAT |
 
 The `openssl` generators above are convenience: any long random string works —
@@ -147,8 +161,13 @@ done
 
 ```bash
 npm ci && npm test && npx tsc --noEmit    # local gate — green before any deploy
-npm run deploy                            # = wrangler deploy --env=""
+npm run deploy                            # = ensure-vectorize + wrangler deploy --env=""
 ```
+
+The first CLI deploy stops with *Missing required secrets* until §3 has run —
+that is `secrets.required` working as intended; re-run it after setting the
+secrets. Every later deploy also re-checks (and provisions, when missing) the
+Vectorize index before uploading.
 
 **Never `wrangler deploy --env prod`.** `wrangler.jsonc` carries inert
 `env` stubs for future staging/prod isolation, but env blocks do **not** inherit
@@ -194,14 +213,15 @@ exactly these values:
 | --- | --- |
 | Project name | **must equal the worker `name` in `wrangler.jsonc`** — `brain-api` for a stock checkout. The dashboard pre-fills the repo name (`brain`); change it to match before clicking Deploy. |
 | Build command | `npm ci && npm test` — shown as optional, but this is the gate: a red suite blocks the deploy. |
-| Deploy command | replace the default `npx wrangler deploy` with `npx wrangler deploy --env=""` (same rule as §4 — an env flag would deploy a worker with zero bindings). |
+| Deploy command | `npm run deploy` — the script provisions the Vectorize index, then runs `wrangler deploy --env=""` (the `--env=""` pins the top-level config — an env flag would deploy a worker with zero bindings). |
 | Preview command | leave the default (`npx wrangler preview`) — unused below. |
 | Enable Preview builds | **turn OFF** — previews would run against the same prod D1/R2; there is no preview isolation yet. |
 | Protect with Cloudflare Access | leave OFF — the worker authenticates with its own tokens. |
 
-Click **Deploy**. Complete §2–§4 first: `secrets.required` makes the deploy
-step fail loudly if the six secrets are not on the worker yet — set them, then
-re-run the build. Every later push to `master` runs the same pipeline.
+Click **Deploy**. If §3 has not run yet, the first build fails loudly at the
+deploy step with *Missing required secrets* — by design (`secrets.required`):
+set the six secrets, then re-run the build. Every later push to `master` runs
+the same pipeline.
 
 **B. Existing worker** — dashboard → *Workers & Pages* → `brain-api` →
 *Settings* → *Builds* → connect the GitHub repo, production branch `master`,
@@ -316,6 +336,9 @@ curl -s -X POST https://<worker>/v1/proposals/<id>/apply \
 | Symptom | Likely cause | Fix |
 | --- | --- | --- |
 | Every authenticated route 401s | a secret is missing/different on the worker | `npx wrangler secret list`; re-put; deploys should have failed via `secrets.required` |
+| First deploy stops with "Missing required secrets" | secrets not set yet — by design | add the six (README step 3 / §3), then **Retry deployment** |
+| Deploy fails with error `10159` (Vectorize) | build token could not create/see `brain-memory` | create it in the dashboard (768, cosine + metadata indexes) and retry |
+| `503 server not ready: schema bootstrap failed` | the first-request schema bootstrap hit a D1 error | check `wrangler tail`; it retries on the next request — a persistent failure means D1 is unreachable |
 | Worker runs but D1/R2 calls fail, bindings undefined | deployed with `--env prod` | redeploy with `npm run deploy` |
 | Push builds stop triggering | GitHub App lost repo access | re-connect the Workers and Pages app (docs/engineering.md §"Deploy & CI") |
 | `403` with "blocked access based on your browser's signature" | scripted User-Agent (e.g. python-urllib) hits the edge bot filter | probe with `curl` or a normal UA |

@@ -34,7 +34,7 @@ commit, not a deploy trigger.
 | Where | Trigger | What it does |
 | --- | --- | --- |
 | GitHub Actions (`.github/workflows/ci.yml`) | every PR + push to `master` | `npm ci` + full suite + typecheck; a separate job for the plugin suite. No secrets, nothing live. |
-| Cloudflare Workers Builds | push to `master` | `npm ci && npm test`, then `npx wrangler deploy --env=""` **only if green** — this is the production deploy. |
+| Cloudflare Workers Builds | push to `master` | `npm ci && npm test`, then `npm run deploy` (Vectorize provisioning + `wrangler deploy --env=""`) **only if green** — this is the production deploy. |
 | Dependabot | weekly | dependency-update PRs (root npm, plugin npm, GitHub Actions). |
 
 Before touching build settings, read the Workers Builds notes in

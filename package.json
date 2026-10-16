@@ -21,7 +21,7 @@
         "description": "Random string (32+ chars). Owner key — apply/discard, exports, purge, manual kicks."
       },
       "GEMINI_API_KEY": {
-        "description": "Google AI Studio key (aistudio.google.com), sent through your AI Gateway — free tier works."
+        "description": "Google AI Studio key (aistudio.google.com) — free tier works. Sent through your AI Gateway when AI_GATEWAY_BASE is set."
       },
       "AI_BASE_URL": {
         "description": "Optional. Base URL of any OpenAI-compatible chat API (e.g. https://api.openai.com/v1). Unset = chat runs on Gemini as before."
@@ -51,7 +51,7 @@
         "description": "(Optional) GitHub token for the activity connector — raises API rate limits."
       },
       "AI_GATEWAY_BASE": {
-        "description": "Your AI Gateway endpoint: https://gateway.ai.cloudflare.com/v1/<account_id>/brain/google-ai-studio"
+        "description": "Optional. Your AI Gateway endpoint (https://gateway.ai.cloudflare.com/v1/<account_id>/brain/google-ai-studio) — routes Gemini calls through your gateway for analytics/caching. Unset = calls go straight to Google."
       },
       "BRAIN_DB": {
         "description": "D1 database: event log and derived memory."

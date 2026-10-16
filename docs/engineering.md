@@ -258,7 +258,13 @@ inspector.
 
 - Worker `brain-api` → `https://brain-api.taxin-404.workers.dev` (deployed)
 - D1 `brain-db` + R2 `brain-raw` live (APAC region), 6/6 remote migrations applied
-- Prod secrets set via `wrangler secret put`; values escrowed out-of-band, **never in the repo**
+- Schema applies itself: migrations are embedded at build time
+  (`src/migrations.generated.ts`, regenerate with `npm run migrations:embed`) and
+  applied atomically by `src/bootstrap.ts` on the first request — fresh forks need
+  no terminal step. Bookkeeping is the standard `d1_migrations` table, shared with
+  `wrangler d1 migrations apply` (prod verified a no-op: 6/6 rows already there).
+- Prod secrets set via `wrangler secret put`; values escrowed out-of-band, **never in the repo**.
+  `AI_GATEWAY_BASE` lives as a secret too — optional everywhere; unset falls back to Google directly.
 - Crons: `*/30` sweep + nightly consolidation (`0 3 * * *`) + weekly/monthly reflections (`0 4 * * 1` / `0 4 1 * *`)
 
 ## Deploy & CI (Cloudflare Workers Builds)
@@ -273,15 +279,28 @@ live.
 - **Build runners can spike slower than local runs.** The export CPU-ceiling
   tests carry a 20 s per-test timeout — the 5 s default flaked on 2026-10-16
   and failed the build command, blocking the deploy.
-- **Deploy command:** `npx wrangler deploy --env=""` — the trailing `--env=""`
-  targets the top-level config on purpose: `env` blocks do **not** inherit
-  bindings, so `--env prod` would deploy a worker with zero D1/R2 bindings.
+- **Deploy command:** `npm run deploy` — runs `scripts/ensure-vectorize.mjs`
+  first (creates `brain-memory` 768/cosine + its `type`/`status`/`sensitivity`
+  metadata indexes when missing; Vectorize, unlike D1/R2, is not
+  auto-provisioned and a missing index fails the deploy with error 10159), then
+  `wrangler deploy --env=""`. The trailing `--env=""` targets the top-level
+  config on purpose: `env` blocks do **not** inherit bindings, so `--env prod`
+  would deploy a worker with zero D1/R2 bindings. Prod runs the same command as
+  forks, so the fork path stays dogfooded.
+- **Fork-safe config:** `wrangler.jsonc` carries no `database_id` (the D1
+  binding auto-provisions `brain-db` by name on a fresh account and re-links on
+  existing ones — probe battery 2026-10-16) and no owner-specific vars
+  (`AI_GATEWAY_BASE` is a secret now).
 - **Secrets survive deploys** (worker-level, never touched by a deploy):
   `PAYLOAD_KEK`, `CONTENT_HMAC_KEY`, `MCP_READ_TOKEN`, `MCP_PROPOSE_TOKEN`,
-  `ADMIN_TOKEN`, `GEMINI_API_KEY`. `keep_vars: true` additionally protects
-  dashboard-set plain-text vars, and `secrets.required` in `wrangler.jsonc`
-  makes a deploy *fail loudly* if any of the six required secrets is missing.
-  Symptom of a missing secret: every authenticated route 401s.
+  `ADMIN_TOKEN`, `GEMINI_API_KEY` (+ optional `AI_GATEWAY_BASE`). `keep_vars: true`
+  additionally protects dashboard-set plain-text vars, and `secrets.required` in
+  `wrangler.jsonc` makes a deploy *fail loudly* if any of the six required
+  secrets is missing — the fork flow leans on this (red first build → paste six
+  secrets → **Retry deployment**). Symptom of one deleted later: every
+  authenticated route 401s. Gotcha: `secret put` is rejected with `10053` while a
+  plain-text binding of the same name is live — the deploy must remove the var
+  first (how prod's `AI_GATEWAY_BASE` moved config-var → secret on 2026-10-16).
 - **Preview builds are intentionally NOT configured** — previews would run
   against the same prod D1/R2; there is no preview isolation yet.
 - **Push-triggered builds go silent if the GitHub App loses repo access.** The
@@ -302,6 +321,13 @@ curl -s -H "Authorization: Bearer $T" "https://api.cloudflare.com/client/v4/acco
 curl -s -X POST -H "Authorization: Bearer $T" -H "Content-Type: application/json" \
   "https://api.cloudflare.com/client/v4/accounts/$A/builds/triggers/$TRIGGER/builds" -d '{"branch":"master"}'
 curl -s -H "Authorization: Bearer $T" "https://api.cloudflare.com/client/v4/accounts/$A/builds/builds/<build_uuid>/logs"
+
+# read the trigger config (build/deploy commands) — /workers/$TAG segment required here:
+curl -s -H "Authorization: Bearer $T" "https://api.cloudflare.com/client/v4/accounts/$A/builds/workers/$TAG/triggers"
+
+# update the trigger — NO /workers/$TAG segment on this path:
+curl -s -X PATCH -H "Authorization: Bearer $T" -H "Content-Type: application/json" \
+  "https://api.cloudflare.com/client/v4/accounts/$A/builds/triggers/$TRIGGER" -d '{"deploy_command":"npm run deploy"}'
 ```
 
 Note: list items carry no top-level `commit_hash` — it lives under each

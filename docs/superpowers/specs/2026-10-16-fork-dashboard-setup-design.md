@@ -139,11 +139,14 @@ not create an admin.)
 2. Script: local single-shot runs against the prod account — no-op vs the live
    `brain-memory`; scratch index lifecycle (create → re-run reuses → metadata →
    delete; account left clean).
-3. Pre-push prod prep (single-shot each, ledgered): `AI_GATEWAY_BASE` secret
-   put; Builds deploy command → `npm run deploy`.
+3. Prod prep (single-shot each, ledgered): Builds deploy command → `npm run deploy`
+   (pre-push). `AI_GATEWAY_BASE` secret put is post-push: `10053` rejects the
+   secret while the plain-text var is live, and the push deploy is what removes
+   the var (the direct-Google fallback covers the window).
 4. Post-push: CI green; Workers Builds green — this real build pins the build
-   token's Vectorize behavior; single-shot `GET /v1/health-report` +
-   `GET /v1/search` smoke; AI wiring still native via the gateway.
+   token's Vectorize behavior; `AI_GATEWAY_BASE` secret put; single-shot
+   `GET /v1/health-report` + `GET /v1/search` smoke; AI wiring still native via
+   the gateway.
 5. Fresh-account end-to-end (owner action): new free account → fork connect →
    red build → six secrets → Retry → zeros health; pin the dashboard
    delete-flow wording; document.
