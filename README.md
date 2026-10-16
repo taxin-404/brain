@@ -379,3 +379,7 @@ builds.
   Two MCP entries share `/mcp`: `brain` (MCP_READ token — recall / get_blocks /
   health_report) and `brain-propose` (MCP_PROPOSE token — remember + propose_*).
   Read tools accept either token; writes require MCP_PROPOSE.
+
+## License
+
+[MIT](LICENSE) © 2026 taxin-404 — self-host, fork, modify freely; just keep the copyright notice.

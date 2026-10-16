@@ -92,3 +92,8 @@ Owner: "make a proper setup doc". Added `docs/setup.md`: provision → migration
 - **Reader-tested by a fresh no-context agent, twice.** Pass 1 found 4 blocking gaps — secrets never captured end-to-end (no generate→escrow→push flow, undefined `$ADMIN_TOKEN`), no clone/provenance step or `wrangler.jsonc` edit checklist, manual requeue (`POST /v1/extract`) shown with no auth/body, `npx wrangler` before `npm ci`. All fixed. Pass 2 delta: 13/15 gaps resolved; new findings fixed — the §3 blocks are now re-run-safe (generation is one-time: skips if `.secrets/prod.env` exists, so a re-run can never regenerate `PAYLOAD_KEK` and orphan payloads; the push loop aborts on empty values, e.g. an unedited `GEMINI_API_KEY` line).
 - **Simulated the §3 blocks** in /tmp with a mock npx (throwaway values, never printed): second generation run skips with a NOTE; push loop does 5 puts then `ABORT: GEMINI_API_KEY is empty` exactly as the doc claims.
 - Facts re-verified against code: extract clamp 100/10 + admin scope, the six `BLOCK_KEYS`, MCP propose-refusal string, inert `env` stubs, `.secrets/`/`.dev.vars` gitignored. Gates: 236/236 + tsc clean (doc-only change on green code).
+
+## MIT license — repo opened for everyone (2026-10-16)
+Owner: "add licence because i will make it for everyone". Chose MIT (options offered: MIT / Apache-2.0 / AGPL-3.0; MIT = maximum adoption), copyright holder `taxin-404`.
+- Added root `LICENSE` (canonical MIT text, © 2026 taxin-404), `"license": "MIT"` in root + plugin `package.json`, and a `## License` section at the README bottom.
+- Gates: JSON parse + 236/236 + tsc clean; pushed and CI-green (this commit).
