@@ -143,3 +143,30 @@ record.
     [38875734550](https://github.com/taxin-404/brain/actions/runs/38875734550)
     — success; Workers Builds `a1791be9-f6b8-46c6-89e7-98c820e4d849` — build +
     deploy success.
+- 2026-10-16: AI-provider design doc + verification close-out (three pushes):
+  - `ded1597` (earlier ledger close-out): GitHub Actions run
+    [38876197058](https://github.com/taxin-404/brain/actions/runs/38876197058)
+    — success; Workers Builds `738e63dc-1a21-40e5-9a12-3da53ade0cb9` — build +
+    deploy success.
+  - `f468852`: design doc for pluggable AI providers
+    (`docs/superpowers/specs/2026-10-16-any-ai-provider-design.md`; owner
+    approval pending). Independent reviewer pass found 5 gaps — all resolved
+    in-doc (largest: the embedding-model switch story — today's backfill only
+    retries `vec_id IS NULL`, so a model switch would have silently mixed
+    vectors; the design makes the backfill signature-aware). GitHub Actions
+    run
+    [38885329146](https://github.com/taxin-404/brain/actions/runs/38885329146)
+    — success. Workers Builds `35a34d3b-a3aa-450e-92f7-5bfc0e758bdd` —
+    **failed**: `test/export.test.ts` "pages the table walk across invocations
+    (CPU ceiling)" exceeded vitest's 5 s default on the build runner (1 failed
+    | 235 passed; GitHub CI passed the same commit — runner spike, not a
+    regression). Deploy step never ran; live worker unchanged.
+  - Fix `6796363`: 20 s per-test timeouts for both export CPU-ceiling tests +
+    `docs/engineering.md` build-runner note. Gate: 236/236, `tsc` clean.
+    Verification: GitHub Actions run
+    [38886284445](https://github.com/taxin-404/brain/actions/runs/38886284445)
+    — success; Workers Builds `85bf30d9-e688-4ea6-b4a6-813c8acc54ba` —
+    build + deploy success.
+  - Close-out (this commit): ledgers this cycle; `docs/engineering.md` gains
+    the Builds-API list/log shapes (commit hash under
+    `build_trigger_metadata`, logs `{result:{lines:[[ms,line],…]}}`).

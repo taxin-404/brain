@@ -304,6 +304,10 @@ curl -s -X POST -H "Authorization: Bearer $T" -H "Content-Type: application/json
 curl -s -H "Authorization: Bearer $T" "https://api.cloudflare.com/client/v4/accounts/$A/builds/builds/<build_uuid>/logs"
 ```
 
+Note: list items carry no top-level `commit_hash` — it lives under each
+item's `build_trigger_metadata.commit_hash`. Build logs return
+`{result:{lines:[[ms,"line"],…]}}`; the tail holds the failure.
+
 The deploy step authenticates with the account's **"terabox build token"**
 (`7d897a7d-0b7f-4ba7-a13a-a2237258c485`), reused because build tokens cannot be
 created via API without token-creation permissions. It is account-scoped and
