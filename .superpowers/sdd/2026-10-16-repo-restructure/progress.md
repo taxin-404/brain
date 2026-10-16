@@ -94,4 +94,8 @@ record.
     notes, and the full read-first map moved to `docs/engineering.md`.
   - Cross-references updated (setup.md, maintenance.md, CONTRIBUTING,
     SECURITY); CHANGELOG `[Unreleased]` notes the change.
-  - Push + CI verification recorded below once watched.
+  - Pushed as `d2c7597` (`e436619..d2c7597`). Verification: GitHub Actions run
+    [38871860143](https://github.com/taxin-404/brain/actions/runs/38871860143)
+    — success (both jobs); Workers Builds
+    `27843d1d-8ae0-458a-98ce-e9f593bd435b` — build + deploy success,
+    `"success":true`, freshness-checked.
