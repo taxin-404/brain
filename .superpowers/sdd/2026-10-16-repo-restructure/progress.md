@@ -57,8 +57,8 @@ record.
 - README: CI/license badges, read-first-map rows, layout rows (`eval/`,
   `.github/`), Develop block points at `.dev.vars.example` + CONTRIBUTING,
   Deploy & CI notes the PR workflow.
-- Release: tag + GitHub release `v0.1.0` planned after everything is green
-  (first public release).
+- Release: `v0.1.0` tagged and published after everything went green (first
+  public release).
 
 ## Verification
 
@@ -67,7 +67,8 @@ record.
 - Plugin `npm ci` re-run from lockfile: see log.
 - Per-commit gates: see log.
 - Post-push: GitHub Actions run + Workers Builds build for the restructure
-  push — recorded below when green.
+  push — both green (see Log).
+- Second push (ledger close-out): watched as well — see Log below.
 
 ## Log
 
@@ -75,4 +76,11 @@ record.
   (`"success":true` in build logs).
 - 2026-10-16 ~07:06Z: baseline gates green (root 236/236, tsc clean, plugin
   4/4).
-- (append below as commits land)
+- 2026-10-16 ~07:15Z: restructure pushed (`1e1fdb8..563371a`, 3 commits).
+- 2026-10-16 ~07:17Z: GitHub Actions run
+  [38865651403](https://github.com/taxin-404/brain/actions/runs/38865651403)
+  — **success** (both jobs: worker suite + typecheck, plugin suite +
+  typecheck; first run of the new workflow).
+- 2026-10-16 ~07:20Z: Workers Builds `9f52fe5b-9e8d-495c-808c-72b6bf88dbd6`
+  — build + deploy success, `"success":true`, freshness-checked.
+- 2026-10-16 ~07:30Z: `v0.1.0` tagged and released (first public release).
