@@ -80,15 +80,16 @@ export function chatConfig(env: Env): ChatConfig {
  *  literal "native" sentinel keeps Gemini embeddings regardless. */
 export function embedConfig(env: Env): EmbedConfig {
   const dimsRaw = env.AI_EMBED_DIMS;
+  const dimsSet = dimsRaw !== undefined && dimsRaw !== "";
   let dims = EMBEDDING_DIMS;
-  if (dimsRaw !== undefined) {
+  if (dimsSet) {
     const n = Number(dimsRaw);
     if (!Number.isInteger(n) || n < 1 || n > 1536) {
       throw new LlmError("config", `AI_EMBED_DIMS must be an integer from 1 to 1536 (got "${dimsRaw}")`);
     }
     dims = n;
   }
-  const base = env.AI_EMBED_BASE_URL === "native" ? undefined : env.AI_EMBED_BASE_URL ?? env.AI_BASE_URL;
+  const base = env.AI_EMBED_BASE_URL === "native" ? undefined : firstSet(env.AI_EMBED_BASE_URL, env.AI_BASE_URL);
   if (base) {
     if (!env.AI_EMBED_MODEL) {
       throw new LlmError(
@@ -102,7 +103,7 @@ export function embedConfig(env: Env): EmbedConfig {
       key: firstSet(env.AI_EMBED_API_KEY, env.AI_API_KEY, env.GEMINI_API_KEY),
       model: env.AI_EMBED_MODEL,
       dims,
-      dimsExplicit: dimsRaw !== undefined,
+      dimsExplicit: dimsSet,
       signature: `${env.AI_EMBED_MODEL}@${dims}`,
     };
   }
@@ -118,7 +119,7 @@ export function embedConfig(env: Env): EmbedConfig {
     key: env.GEMINI_API_KEY,
     model: EMBEDDING_MODEL,
     dims,
-    dimsExplicit: dimsRaw !== undefined,
+    dimsExplicit: dimsSet,
     signature: `${EMBEDDING_MODEL}@${dims}`,
   };
 }

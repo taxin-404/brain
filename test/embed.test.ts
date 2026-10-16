@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { http, HttpResponse } from "msw";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import { embedPendingFacts } from "../src/embed";
+import { embedPendingFacts, readIndexDims } from "../src/embed";
 import { LlmError } from "../src/llm";
 import { fakeVec, installFakeVectorize, seedFact, setEnvVars } from "./helpers";
 import { network } from "./server";
@@ -151,5 +151,44 @@ describe("embedPendingFacts", () => {
     expect(err.code).toBe("config");
     expect(err.message).toMatch(/512/);
     expect(err.message).toMatch(/AI_EMBED_DIMS/);
+  });
+
+  it("reads index dims from either describe() shape", () => {
+    expect(readIndexDims({ config: { dimensions: 768, metric: "cosine" } })).toBe(768);
+    expect(readIndexDims({ dimensions: 512 })).toBe(512);
+    expect(readIndexDims({ config: { preset: "some-preset" } })).toBeNull();
+    expect(readIndexDims({})).toBeNull();
+  });
+
+  it("re-embeds pre-signature rows when the dims change (legacy counts only at the default size)", async () => {
+    const store = installFakeVectorize({ dims: 1536 });
+    setEnvVars({ AI_EMBED_DIMS: "1536" });
+    network.use(
+      http.post(EMB_URL, async ({ request }) => {
+        const body = (await request.json()) as {
+          requests?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+        };
+        const reqs = body.requests ?? [];
+        return HttpResponse.json({ embeddings: reqs.map((r) => ({ values: fakeVec(r.content?.parts?.[0]?.text ?? "", 1536) })) });
+      }),
+    );
+    await embedPendingFacts(env); // flush facts left pending by earlier tests at the new dims
+
+    const factId = await seedFact({ name: "dims switch", predicate: "text", object: "epsilon" });
+    const first = await embedPendingFacts(env);
+    expect(first).toEqual({ embedded: 1, failed: 0 });
+
+    // pre-signature state: bare model name, vector already present
+    await env.BRAIN_DB.prepare(`UPDATE facts SET embedding_model = 'gemini-embedding-001' WHERE id = ?1`)
+      .bind(factId)
+      .run();
+
+    const second = await embedPendingFacts(env);
+    expect(second).toEqual({ embedded: 1, failed: 0 });
+    const row = await env.BRAIN_DB.prepare(`SELECT embedding_model FROM facts WHERE id = ?1`)
+      .bind(factId)
+      .first<{ embedding_model: string | null }>();
+    expect(row?.embedding_model).toBe("gemini-embedding-001@1536");
+    expect(store.get(factId)?.metadata.embedding_model).toBe("gemini-embedding-001@1536");
   });
 });

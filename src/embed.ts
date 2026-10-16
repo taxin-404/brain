@@ -1,6 +1,6 @@
 import type { Env } from "./env";
 import { buildEmbedText } from "./facts";
-import { embedConfig, embedTexts, LlmError } from "./llm";
+import { embedConfig, embedTexts, EMBEDDING_DIMS, EMBEDDING_MODEL, LlmError } from "./llm";
 
 export interface EmbedRun {
   embedded: number;
@@ -9,6 +9,15 @@ export interface EmbedRun {
 
 const CHUNK = 10;
 const DEFAULT_MAX = 100;
+
+/** Dims from a Vectorize describe() result, tolerant of both runtime shapes:
+ *  older deployments report `config.dimensions` (or a preset), newer ones a
+ *  top-level `dimensions`. Returns null when unknowable. */
+export function readIndexDims(info: unknown): number | null {
+  const i = info as { config?: { dimensions?: unknown } | null; dimensions?: unknown } | null | undefined;
+  const d = i?.config?.dimensions ?? i?.dimensions;
+  return typeof d === "number" ? d : null;
+}
 
 interface UnembeddedFact {
   id: string;
@@ -29,8 +38,7 @@ export async function embedPendingFacts(env: Env, opts: { maxFacts?: number } = 
   const run: EmbedRun = { embedded: 0, failed: 0 };
 
   const cfg = embedConfig(env);
-  const info = await env.VECTORIZE.describe();
-  const indexDims = "dimensions" in info.config ? info.config.dimensions : null;
+  const indexDims = readIndexDims(await env.VECTORIZE.describe());
   if (indexDims !== null && indexDims !== cfg.dims) {
     throw new LlmError(
       "config",
@@ -38,9 +46,11 @@ export async function embedPendingFacts(env: Env, opts: { maxFacts?: number } = 
     );
   }
 
-  // Pre-signature rows carry the bare model name (the column is NOT NULL
-  // since its first migration); the ?1 bind counts them as current at the
-  // default dims, while a model switch re-embeds them via the ?2 signature.
+  // Pre-signature rows carry the bare model name; they count as current only
+  // at the default model + dims (exactly the signature they were built with).
+  // A dims-only change must re-embed them, so the bare exemption is bound
+  // only when the resolved config is the pristine default.
+  const legacy = cfg.model === EMBEDDING_MODEL && cfg.dims === EMBEDDING_DIMS ? EMBEDDING_MODEL : null;
   const { results } = await env.BRAIN_DB.prepare(
     `SELECT f.id, e.name AS subject_name, f.predicate, f.object_text, f.status, f.sensitivity
      FROM facts f JOIN entities e ON e.id = f.subject_id
@@ -48,7 +58,7 @@ export async function embedPendingFacts(env: Env, opts: { maxFacts?: number } = 
        AND f.sensitivity != 'restricted' AND f.status = 'active'
      ORDER BY f.learned_at ASC LIMIT ?3`,
   )
-    .bind(cfg.model, cfg.signature, maxFacts)
+    .bind(legacy, cfg.signature, maxFacts)
     .all<UnembeddedFact>();
 
   for (let i = 0; i < results.length; i += CHUNK) {

@@ -1,6 +1,7 @@
 import type { Env } from "./env";
 import { readBudget, type BudgetState } from "./budget";
-import { chatConfig, embedConfig } from "./llm";
+import { readIndexDims } from "./embed";
+import { chatConfig, embedConfig, EMBEDDING_DIMS, EMBEDDING_MODEL } from "./llm";
 
 export interface ConsolidationSummary {
   id: string;
@@ -118,8 +119,7 @@ async function aiHealth(env: Env): Promise<AiHealth> {
     const cfg = embedConfig(env);
     let indexDims: number | null = null;
     try {
-      const info = await env.VECTORIZE.describe();
-      indexDims = "dimensions" in info.config ? info.config.dimensions : null;
+      indexDims = readIndexDims(await env.VECTORIZE.describe());
     } catch {
       indexDims = null; // local dev / unavailable index: report unknown, not broken
     }
@@ -131,12 +131,13 @@ async function aiHealth(env: Env): Promise<AiHealth> {
       index_dims: indexDims,
       matches_index: indexDims === cfg.dims,
     };
+    const legacy = cfg.model === EMBEDDING_MODEL && cfg.dims === EMBEDDING_DIMS ? EMBEDDING_MODEL : null;
     const row = await env.BRAIN_DB.prepare(
       `SELECT count(*) AS n FROM facts
        WHERE (vec_id IS NULL OR (embedding_model IS NOT ?1 AND embedding_model IS NOT ?2))
          AND sensitivity != 'restricted' AND status = 'active'`,
     )
-      .bind(cfg.model, cfg.signature)
+      .bind(legacy, cfg.signature)
       .first<{ n?: number }>();
     reembed_backlog = row?.n ?? 0;
   } catch (err) {

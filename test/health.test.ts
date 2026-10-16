@@ -71,6 +71,28 @@ describe("health report (phase 4 fields)", () => {
     expect(report.ai.reembed_backlog).toBeGreaterThanOrEqual(1);
   });
 
+  it("counts pre-signature rows in the backlog once dims differ from the default", async () => {
+    const factId = await seedFact({ name: "legacy backlog", predicate: "waits", object: "old vector" });
+    await env.BRAIN_DB.prepare(
+      `UPDATE facts SET vec_id = id, embedding_model = 'gemini-embedding-001' WHERE id = ?1`,
+    )
+      .bind(factId)
+      .run();
+    // normalize every other fact so the count is exactly ours
+    await env.BRAIN_DB.prepare(
+      `UPDATE facts SET vec_id = COALESCE(vec_id, id), embedding_model = 'gemini-embedding-001@1536' WHERE id != ?1`,
+    )
+      .bind(factId)
+      .run();
+    setEnvVars({ AI_EMBED_DIMS: "1536" });
+    try {
+      const report = await healthReport(env);
+      expect(report.ai.reembed_backlog).toBe(1);
+    } finally {
+      setEnvVars({ AI_EMBED_DIMS: undefined });
+    }
+  });
+
   it("keeps the route up when AI config is broken", async () => {
     setEnvVars({ AI_BASE_URL: "https://oai.test/v1" }); // no AI_MODEL -> chat config error
     try {

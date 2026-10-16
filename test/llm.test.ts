@@ -342,6 +342,27 @@ describe("ai provider config resolution", () => {
     expect(cfg.model).toBe(EMBEDDING_MODEL);
   });
 
+  it("treats an empty AI_EMBED_BASE_URL as unset and inherits the chat base", () => {
+    const cfg = embedConfig({
+      AI_BASE_URL: "https://api.test/v1",
+      AI_MODEL: "m",
+      AI_EMBED_BASE_URL: "",
+      AI_EMBED_MODEL: "embed-m",
+    } as unknown as Env);
+    expect(cfg.mode).toBe("compat");
+    expect(cfg.base).toBe("https://api.test/v1");
+  });
+
+  it("treats an empty AI_EMBED_DIMS as unset", () => {
+    const cfg = embedConfig({
+      AI_GATEWAY_BASE: "https://gw.test/x",
+      GEMINI_API_KEY: "g",
+      AI_EMBED_DIMS: "",
+    } as unknown as Env);
+    expect(cfg.dims).toBe(768);
+    expect(cfg.dimsExplicit).toBe(false);
+  });
+
   it("resolves an embeddings-only compatible provider", () => {
     const cfg = embedConfig({
       AI_EMBED_BASE_URL: "https://emb.test/v1",
