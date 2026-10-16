@@ -21,6 +21,18 @@ Repair plan (F2-repair): re-encrypt the failing blobs offline from the original 
 ## F2-repair — offline re-encryption (in flight 2026-10-16)
 - Pipeline: fresh backup artifact (job `01M51BR9K6Z194TK931JFS1FE1`, 7,854,315 bytes / 21 parts, downloaded inside the 15-min TTL) → step-level split (plain 215 / blob_fail 1,773 / no_key 39) → source reconstruction from the local OpenCode store (`session_message` v2 rows; full ids, no truncation) → `redactPayload` (esbuild-bundled from src) → **byte-exact gate: HMAC(redacted) must equal the stored `content_hmac`** → unwrap the event's own data key with the escrowed KEK → re-encrypt → direct R2 put.
 - Verified: **1,768 / 1,773** reconstructed byte-exact. Skipped 5 (all "content mutated between ingest and now": 2 `_t2` tool parts whose state completed after ingest, 1 live-streaming message's text/parts — 0.28%).
-- Sample round-trip proven first: `oc_msg_13f92782e001C3wbaZ7Nf9i8m4` re-uploaded → downloaded from prod R2 → decrypts under its stored wrapped key → HMAC MATCHES stored content_hmac.
+- Sample round-trip proven first: `oc_msg_13f92782e001C3wbaZ7Nf9i8m4` re-uploaded → downloaded from prod R2 → decrypts under its stored wrapped key → HMAC MATCHES stored content_hmac. **Correction (2026-10-16 late): CLI `r2 object` commands defaulted to the local simulation — that round-trip exercised local storage only. The authoritative prod-side proof is the post-repair export re-split (F2-repair verify, below).**
 - Upload: 1,768 files, 4× wrangler puts, retry-drain for flakes.
 - Post-verify plan: fresh export after uploads → re-run step-level split → expect `blob_fail ≈ 5` (the skipped); then reuse that artifact for the DR drill.
+
+## F2-repair upload — local/remote trap caught mid-flight (2026-10-16)
+The first upload drain "completed" 1,357/1,768 with 61 flakes — then the demand surfaced: **`wrangler r2 object put/get` default to the LOCAL simulation in this environment** (`--remote` required; without it objects land in `.wrangler/state/v3/r2/…` and CLI round-trips falsely succeed while the worker sees nothing). Discovered while debugging staged drill artifacts that the worker 404'd. All repair scripts fixed (`upload.sh`, `drill-restore.sh`), drain re-run clean: **1,768/1,768 remote, 0 failed**.
+Discrimination method (keep for ops): `wrangler r2 object get <bucket>/<key> --local` vs `--remote` on the same key.
+
+## DR drill — GREEN (2026-10-16)
+- Scratch env (worker `brain-drill`, D1 `brain-drill-db`, R2 `brain-drill-raw`, Vectorize `brain-memory-drill`), all on free plan, driven with single-shot/bounded calls only. Full report: `docs/dr-drill.md`.
+- Artifact staged **remotely** (7,854,315 bytes, 2,027 payload rows) → `POST /v1/restore` loop → **done:true in 3 calls**; every table's restored count equals the artifact exactly; 2,027 payload puts (800/800/427); `fts_rows:2004`; drill health-report parity; restore audit entry written.
+- Spot check: restored R2 blob sha256-identical to the artifact b64; decrypts with the KEK under the stored `wrapped_key`; redact→HMAC matches stored `content_hmac`. `GET /v1/search` returns ranked hits.
+- **Ceiling not reproduced at current scale**: restore v1 (full re-walk per call, 800 puts/call) fits free-plan limits at 7.85 MB. **Restore-v2 deferred** — trigger: artifact > ~25 MB (3× today) or an observed 1102/1101 in a restore call; design (line cursor, 250 puts/call) stays queued in this ledger.
+- F1 fixed + committed `6f1cf8d` (`BACKUP_PAYLOAD_PAGE = 200` clamp + regression test; 235/235 tests, tsc clean).
+- Note: the drill artifact was the pre-repair export — restore copies ciphertext verbatim, so old damage would persist in that restored copy; prod-side healing was the repair upload above, and future exports carry the repaired blobs.
