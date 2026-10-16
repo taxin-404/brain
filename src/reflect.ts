@@ -3,7 +3,7 @@ import { writeAudit } from "./audit";
 import { newEventId } from "./crypto";
 import type { Env } from "./env";
 import { json } from "./http";
-import { geminiJson, LlmError } from "./llm";
+import { llmJson, LlmError } from "./llm";
 import { REFLECTION_PROMPT } from "./prompts";
 
 /** Weekly/monthly reflection (design §8 phase 4): 3-5 durable insights over the
@@ -74,7 +74,7 @@ export async function runReflection(
   let degraded = false;
   let insights: ReflectionInsight[] = [];
   try {
-    const res = await geminiJson(
+    const res = await llmJson(
       env,
       {
         system: REFLECTION_PROMPT,

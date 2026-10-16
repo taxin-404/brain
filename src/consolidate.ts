@@ -5,7 +5,7 @@ import type { Env } from "./env";
 import { expireFact, mergeFacts, supersedeFact } from "./factstore";
 import { MULTIVALUED_PREDICATES } from "./facts";
 import { json } from "./http";
-import { geminiJson, LlmError } from "./llm";
+import { llmJson, LlmError } from "./llm";
 import { CONSOLIDATION_PROMPT } from "./prompts";
 
 /** Nightly consolidation (design §8 phase 4): retire lapsed `temporary` facts,
@@ -223,7 +223,7 @@ export async function runConsolidation(
   if (payload.length > 0) {
     report.groups_sent = payload.length;
     try {
-      const res = await geminiJson(env, { system: CONSOLIDATION_PROMPT, user: JSON.stringify({ groups: payload }) }, (v) =>
+      const res = await llmJson(env, { system: CONSOLIDATION_PROMPT, user: JSON.stringify({ groups: payload }) }, (v) =>
         consolidationResultSchema.parse(v),
       );
       result = res.value;

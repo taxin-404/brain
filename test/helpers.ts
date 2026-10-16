@@ -91,6 +91,15 @@ export function installFakeVectorize(): Map<string, StoredVector> {
   return store;
 }
 
+/** Set (or delete, when undefined) env vars through the same writable env
+ *  proxy seam as installFakeVectorize. Tests must restore what they touch. */
+export function setEnvVars(vars: Record<string, string | undefined>): void {
+  for (const [key, value] of Object.entries(vars)) {
+    if (value === undefined) delete (env as unknown as Record<string, unknown>)[key];
+    else (env as unknown as Record<string, unknown>)[key] = value;
+  }
+}
+
 let factSeedTs = 1_750_000_000_000;
 
 /** Seed an entity + source event + fact (+ its facts_fts and fact_sources rows)

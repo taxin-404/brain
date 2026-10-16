@@ -227,17 +227,133 @@ async function generate<T>(
   };
 }
 
-export async function geminiJson<T>(
+interface CompatChatResponse {
+  choices?: Array<{ message?: { content?: unknown } }>;
+  usage?: { prompt_tokens?: number; completion_tokens?: number };
+}
+
+/** POST to an OpenAI-compatible provider. Retries 429/5xx/network up to 3
+ *  total attempts (500ms * attempt backoff); other 4xx fail fast with the
+ *  provider's response text clipped into the message. */
+async function postCompatJson(
+  target: { base: string; key?: string },
+  path: string,
+  body: unknown,
+): Promise<unknown> {
+  let lastError: LlmError | null = null;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    let res: Response;
+    try {
+      res = await fetch(`${target.base}${path}`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          ...(target.key ? { authorization: `Bearer ${target.key}` } : {}),
+        },
+        body: JSON.stringify(body),
+      });
+    } catch (e) {
+      lastError = new LlmError("network", `ai provider fetch failed: ${String(e)}`);
+      if (attempt < MAX_ATTEMPTS) {
+        await sleep(RETRY_BASE_MS * attempt);
+        continue;
+      }
+      throw lastError;
+    }
+    if (res.status === 429 || res.status >= 500) {
+      lastError = new LlmError("http", `ai provider http ${res.status}`, res.status);
+      if (attempt < MAX_ATTEMPTS) {
+        await sleep(RETRY_BASE_MS * attempt);
+        continue;
+      }
+      throw lastError;
+    }
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new LlmError("http", `ai provider http ${res.status}: ${text.slice(0, 200)}`, res.status);
+    }
+    try {
+      return await res.json();
+    } catch (e) {
+      throw new LlmError("parse", `ai provider response not json: ${String(e)}`);
+    }
+  }
+  throw lastError ?? new LlmError("network", "unreachable");
+}
+
+async function generateCompat<T>(
+  cfg: ChatConfig,
+  model: string,
+  input: { system?: string; user: string; maxOutputTokens?: number; temperature?: number },
+  validate: (v: unknown) => T,
+): Promise<{ value: T; tokensIn: number; tokensOut: number; model: string }> {
+  const messages = [
+    ...(input.system ? [{ role: "system", content: input.system }] : []),
+    { role: "user", content: input.user },
+  ];
+  const body: Record<string, unknown> = {
+    model,
+    messages,
+    temperature: input.temperature ?? 0.2,
+    max_tokens: input.maxOutputTokens ?? 2048,
+    response_format: { type: "json_object" },
+  };
+  let resp: CompatChatResponse;
+  try {
+    resp = (await postCompatJson(cfg, "/chat/completions", body)) as CompatChatResponse;
+  } catch (err) {
+    // Some providers reject JSON mode with a 400 that names the parameter:
+    // retry once without it instead of failing the whole call.
+    if (err instanceof LlmError && err.status === 400 && err.message.includes("response_format")) {
+      resp = (await postCompatJson(cfg, "/chat/completions", {
+        ...body,
+        response_format: undefined,
+      })) as CompatChatResponse;
+    } else {
+      throw err;
+    }
+  }
+  const content = resp.choices?.[0]?.message?.content;
+  if (typeof content !== "string") {
+    throw new LlmError("parse", "ai provider response missing choices[0].message.content");
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(content);
+  } catch (e) {
+    throw new LlmError("parse", `ai provider text not json: ${String(e)}`);
+  }
+  let value: T;
+  try {
+    value = validate(parsed);
+  } catch (e) {
+    throw new LlmError("parse", `ai provider value failed validation: ${String(e)}`);
+  }
+  return {
+    value,
+    tokensIn: resp.usage?.prompt_tokens ?? 0,
+    tokensOut: resp.usage?.completion_tokens ?? 0,
+    model,
+  };
+}
+
+export async function llmJson<T>(
   env: Env,
   input: { model?: string; system?: string; user: string; maxOutputTokens?: number; temperature?: number },
   validate: (v: unknown) => T,
 ): Promise<{ value: T; tokensIn: number; tokensOut: number; model: string }> {
-  const primary = input.model ?? EXTRACTION_MODEL;
+  const cfg = chatConfig(env);
+  const primary = input.model ?? cfg.model;
   try {
-    return await generate(env, primary, input, validate);
+    return cfg.mode === "native"
+      ? await generate(env, primary, input, validate)
+      : await generateCompat(cfg, primary, input, validate);
   } catch (err) {
-    if (!(err instanceof LlmError) || !fallbackWorthy(err)) throw err;
-    return await generate(env, EXTRACTION_FALLBACK_MODEL, input, validate);
+    if (!(err instanceof LlmError) || !fallbackWorthy(err) || !cfg.fallback) throw err;
+    const fallback = cfg.fallback;
+    return cfg.mode === "native"
+      ? await generate(env, fallback, input, validate)
+      : await generateCompat(cfg, fallback, input, validate);
   }
 }
 

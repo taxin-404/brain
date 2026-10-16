@@ -10,7 +10,7 @@ import {
   type SourceContext,
 } from "./facts";
 import { json } from "./http";
-import { geminiJson, LlmError } from "./llm";
+import { llmJson, LlmError } from "./llm";
 import { FACT_EXTRACTION_PROMPT } from "./prompts";
 
 export interface ExtractionRun {
@@ -129,7 +129,7 @@ export async function processExtractions(
     const lines = chunk.map((r) => ({ event_id: r.id, actor: r.actor, trust: r.trust, excerpt: r.excerpt ?? "" }));
 
     try {
-      const { value, tokensIn, tokensOut, model } = await geminiJson(
+      const { value, tokensIn, tokensOut, model } = await llmJson(
         env,
         { system: FACT_EXTRACTION_PROMPT, user: JSON.stringify(lines) },
         (v) => normalizeCandidates(v, ctx),

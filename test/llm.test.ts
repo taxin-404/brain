@@ -10,10 +10,11 @@ import {
   embedTexts,
   EXTRACTION_FALLBACK_MODEL,
   EXTRACTION_MODEL,
-  geminiJson,
+  llmJson,
   LlmError,
 } from "../src/llm";
 import { network } from "./server";
+import { setEnvVars } from "./helpers";
 
 const GEN_URL = "https://gw.test/google-ai-studio/v1beta/models/gemini-3.5-flash-lite:generateContent";
 const FALLBACK_URL = "https://gw.test/google-ai-studio/v1beta/models/gemini-3.1-flash-lite:generateContent";
@@ -61,7 +62,7 @@ describe("llm via ai gateway", () => {
         return HttpResponse.json(genReply('{"ok":true}'));
       }),
     );
-    const res = await geminiJson(env, { user: "Say ok", system: "be terse" }, (v) => v as { ok: boolean });
+    const res = await llmJson(env, { user: "Say ok", system: "be terse" }, (v) => v as { ok: boolean });
     expect(res.value).toEqual({ ok: true });
     expect(res.tokensIn).toBe(12);
     expect(res.tokensOut).toBe(3);
@@ -82,7 +83,7 @@ describe("llm via ai gateway", () => {
         return calls === 1 ? HttpResponse.text("boom", { status: 500 }) : HttpResponse.json(genReply('{"ok":true}'));
       }),
     );
-    const res = await geminiJson(env, { user: "Say ok" }, (v) => v as { ok: boolean });
+    const res = await llmJson(env, { user: "Say ok" }, (v) => v as { ok: boolean });
     expect(res.value).toEqual({ ok: true });
     expect(calls).toBe(2);
   });
@@ -100,7 +101,7 @@ describe("llm via ai gateway", () => {
         return HttpResponse.text("boom", { status: 500 });
       }),
     );
-    await expect(geminiJson(env, { user: "Say ok" }, (v) => v)).rejects.toMatchObject({
+    await expect(llmJson(env, { user: "Say ok" }, (v) => v)).rejects.toMatchObject({
       name: "LlmError",
       code: "http",
       status: 500,
@@ -122,7 +123,7 @@ describe("llm via ai gateway", () => {
         return HttpResponse.json(genReply('{"ok":true}'));
       }),
     );
-    const res = await geminiJson(env, { user: "Say ok" }, (v) => v as { ok: boolean });
+    const res = await llmJson(env, { user: "Say ok" }, (v) => v as { ok: boolean });
     expect(res.value).toEqual({ ok: true });
     expect(res.model).toBe("gemini-3.1-flash-lite");
     expect(primaryCalls).toBe(3);
@@ -142,7 +143,7 @@ describe("llm via ai gateway", () => {
         return HttpResponse.json(genReply('{"ok":true}'));
       }),
     );
-    const res = await geminiJson(env, { user: "Say ok" }, (v) => v as { ok: boolean });
+    const res = await llmJson(env, { user: "Say ok" }, (v) => v as { ok: boolean });
     expect(res.value).toEqual({ ok: true });
     expect(res.model).toBe("gemini-3.1-flash-lite");
     expect(primaryCalls).toBe(1);
@@ -158,7 +159,7 @@ describe("llm via ai gateway", () => {
         return HttpResponse.json(genReply('{"ok":true}'));
       }),
     );
-    await expect(geminiJson(env, { user: "Say ok" }, (v) => v)).rejects.toMatchObject({
+    await expect(llmJson(env, { user: "Say ok" }, (v) => v)).rejects.toMatchObject({
       code: "http",
       status: 400,
     });
@@ -173,7 +174,7 @@ describe("llm via ai gateway", () => {
         return HttpResponse.text("nope", { status: 400 });
       }),
     );
-    await expect(geminiJson(env, { user: "Say ok" }, (v) => v)).rejects.toMatchObject({
+    await expect(llmJson(env, { user: "Say ok" }, (v) => v)).rejects.toMatchObject({
       code: "http",
       status: 400,
     });
@@ -182,13 +183,13 @@ describe("llm via ai gateway", () => {
 
   it("maps non-JSON model text to LlmError parse", async () => {
     network.use(http.post(GEN_URL, () => HttpResponse.json(genReply("not json at all"))));
-    await expect(geminiJson(env, { user: "Say ok" }, (v) => v)).rejects.toMatchObject({ code: "parse" });
+    await expect(llmJson(env, { user: "Say ok" }, (v) => v)).rejects.toMatchObject({ code: "parse" });
   });
 
   it("maps validator failures to LlmError parse", async () => {
     network.use(http.post(GEN_URL, () => HttpResponse.json(genReply("{}"))));
     await expect(
-      geminiJson(env, { user: "Say ok" }, () => {
+      llmJson(env, { user: "Say ok" }, () => {
         throw new Error("bad shape");
       }),
     ).rejects.toMatchObject({ code: "parse" });
@@ -382,5 +383,187 @@ describe("ai provider config resolution", () => {
   it("exposes the signature via embeddingSignature", () => {
     const e = { AI_GATEWAY_BASE: "https://gw.test/x", GEMINI_API_KEY: "g" } as unknown as Env;
     expect(embeddingSignature(e)).toBe(embedConfig(e).signature);
+  });
+});
+
+describe("llm via an OpenAI-compatible provider", () => {
+  const CHAT_URL = "https://oai.test/v1/chat/completions";
+
+  interface CompatBody {
+    model?: string;
+    messages?: Array<{ role: string; content: string }>;
+    max_tokens?: number;
+    temperature?: number;
+    response_format?: unknown;
+  }
+
+  const compatReply = (content: string, usage = { prompt_tokens: 0, completion_tokens: 0 }) => ({
+    choices: [{ message: { content } }],
+    usage,
+  });
+
+  const setupCompat = () =>
+    setEnvVars({ AI_BASE_URL: "https://oai.test/v1", AI_API_KEY: "sk-test", AI_MODEL: "oai-test-model" });
+
+  const clearAiEnv = () =>
+    setEnvVars({
+      AI_BASE_URL: undefined,
+      AI_API_KEY: undefined,
+      AI_MODEL: undefined,
+      AI_FALLBACK_MODEL: undefined,
+      GEMINI_API_KEY: "dev-gemini",
+    });
+
+  beforeAll(async () => {
+    await network.enable();
+  });
+
+  afterEach(() => {
+    network.resetHandlers();
+    clearAiEnv();
+  });
+
+  afterAll(async () => {
+    await network.disable();
+  });
+
+  it("posts chat/completions with bearer auth and parses the response", async () => {
+    setupCompat();
+    const seen: { auth: string | null; body: CompatBody } = { auth: null, body: {} };
+    network.use(
+      http.post(CHAT_URL, async ({ request }) => {
+        seen.auth = request.headers.get("authorization");
+        seen.body = (await request.json()) as CompatBody;
+        return HttpResponse.json(compatReply('{"ok":true}', { prompt_tokens: 7, completion_tokens: 3 }));
+      }),
+    );
+    const res = await llmJson(env, { system: "be terse", user: "Say ok" }, (v) => v as { ok: boolean });
+    expect(seen.auth).toBe("Bearer sk-test");
+    expect(seen.body.model).toBe("oai-test-model");
+    expect(seen.body.messages).toEqual([
+      { role: "system", content: "be terse" },
+      { role: "user", content: "Say ok" },
+    ]);
+    expect(seen.body.max_tokens).toBe(2048);
+    expect(seen.body.temperature).toBe(0.2);
+    expect(seen.body.response_format).toEqual({ type: "json_object" });
+    expect(res).toEqual({ value: { ok: true }, tokensIn: 7, tokensOut: 3, model: "oai-test-model" });
+  });
+
+  it("omits the Authorization header when no key resolves", async () => {
+    setEnvVars({ AI_BASE_URL: "https://oai.test/v1", AI_API_KEY: "", AI_MODEL: "oai-test-model", GEMINI_API_KEY: "" });
+    let auth: string | null = "unset";
+    network.use(
+      http.post(CHAT_URL, ({ request }) => {
+        auth = request.headers.get("authorization");
+        return HttpResponse.json(compatReply('{"ok":true}'));
+      }),
+    );
+    const res = await llmJson(env, { user: "Say ok" }, (v) => v as { ok: boolean });
+    expect(res.value).toEqual({ ok: true });
+    expect(auth).toBeNull();
+  });
+
+  it("retries a 5xx and succeeds on the second attempt", async () => {
+    setupCompat();
+    let calls = 0;
+    network.use(
+      http.post(CHAT_URL, () => {
+        calls += 1;
+        return calls === 1 ? HttpResponse.text("boom", { status: 500 }) : HttpResponse.json(compatReply('{"ok":true}'));
+      }),
+    );
+    const res = await llmJson(env, { user: "Say ok" }, (v) => v as { ok: boolean });
+    expect(res.value).toEqual({ ok: true });
+    expect(calls).toBe(2);
+  });
+
+  it("falls back to AI_FALLBACK_MODEL on availability failures", async () => {
+    setEnvVars({
+      AI_BASE_URL: "https://oai.test/v1",
+      AI_API_KEY: "sk-test",
+      AI_MODEL: "oai-test-model",
+      AI_FALLBACK_MODEL: "oai-fallback",
+    });
+    const models: string[] = [];
+    network.use(
+      http.post(CHAT_URL, async ({ request }) => {
+        const body = (await request.json()) as CompatBody;
+        models.push(body.model ?? "");
+        if (body.model === "oai-fallback") return HttpResponse.json(compatReply('{"ok":true}'));
+        return HttpResponse.text("down", { status: 503 });
+      }),
+    );
+    const res = await llmJson(env, { user: "Say ok" }, (v) => v as { ok: boolean });
+    expect(res.model).toBe("oai-fallback");
+    expect(models).toEqual(["oai-test-model", "oai-test-model", "oai-test-model", "oai-fallback"]);
+  });
+
+  it("does not fall back when AI_FALLBACK_MODEL is unset", async () => {
+    setupCompat();
+    let calls = 0;
+    network.use(
+      http.post(CHAT_URL, () => {
+        calls += 1;
+        return HttpResponse.text("down", { status: 503 });
+      }),
+    );
+    await expect(llmJson(env, { user: "Say ok" }, (v) => v)).rejects.toMatchObject({ code: "http", status: 503 });
+    expect(calls).toBe(3);
+  });
+
+  it("drops JSON mode once when the provider rejects response_format", async () => {
+    setupCompat();
+    const bodies: CompatBody[] = [];
+    network.use(
+      http.post(CHAT_URL, async ({ request }) => {
+        const body = (await request.json()) as CompatBody;
+        bodies.push(body);
+        if (body.response_format) {
+          return HttpResponse.json({ error: { message: "unknown parameter: response_format" } }, { status: 400 });
+        }
+        return HttpResponse.json(compatReply('{"ok":true}'));
+      }),
+    );
+    const res = await llmJson(env, { user: "Say ok" }, (v) => v as { ok: boolean });
+    expect(res.value).toEqual({ ok: true });
+    expect(bodies).toHaveLength(2);
+    expect(bodies[1].response_format).toBeUndefined();
+  });
+
+  it("keeps parse failures fail-fast even with a fallback configured", async () => {
+    setEnvVars({
+      AI_BASE_URL: "https://oai.test/v1",
+      AI_API_KEY: "sk-test",
+      AI_MODEL: "oai-test-model",
+      AI_FALLBACK_MODEL: "oai-fallback",
+    });
+    let calls = 0;
+    network.use(
+      http.post(CHAT_URL, () => {
+        calls += 1;
+        return HttpResponse.json(compatReply("not json at all"));
+      }),
+    );
+    await expect(llmJson(env, { user: "Say ok" }, (v) => v)).rejects.toMatchObject({ code: "parse" });
+    expect(calls).toBe(1);
+  });
+
+  it("fails with a config error before any fetch when AI_MODEL is missing", async () => {
+    setEnvVars({ AI_BASE_URL: "https://oai.test/v1" });
+    await expect(llmJson(env, { user: "Say ok" }, (v) => v)).rejects.toMatchObject({ code: "config" });
+  });
+
+  it("lets input.model override the configured model", async () => {
+    setupCompat();
+    const seen: { body: CompatBody } = { body: {} };
+    network.use(
+      http.post(CHAT_URL, async ({ request }) => {
+        seen.body = (await request.json()) as CompatBody;
+        return HttpResponse.json(compatReply('{"ok":true}'));
+      }),
+    );
+    await llmJson(env, { model: "custom-1", user: "Say ok" }, (v) => v);
+    expect(seen.body.model).toBe("custom-1");
   });
 });
