@@ -97,6 +97,16 @@ there are no format requirements (the KEK is SHA-256-stretched before use).
 Dashboard-first version of this list: README → *Visual quick deploy* → *The
 envs*.
 
+**Optional: non-Google AI provider.** Chat (extraction, reasoning) and
+embeddings can each run on any OpenAI-compatible API — set `AI_BASE_URL` +
+`AI_MODEL` (+ `AI_API_KEY`; keyless works) for chat, and `AI_EMBED_BASE_URL` /
+`AI_EMBED_MODEL` / `AI_EMBED_DIMS` for embeddings (`AI_EMBED_BASE_URL=native`
+keeps Gemini embeddings). With no `AI_*` set, everything runs on Gemini exactly
+as before. For a fully non-Google setup, also drop `GEMINI_API_KEY` from
+`secrets.required` in `wrangler.jsonc`. Changing the embedding model or size
+re-embeds stored facts in the background over the next sweeps. Full table:
+README → *The envs*.
+
 ```bash
 # 1. Generate every value into .secrets/prod.env (gitignored via .secrets/).
 #    One-time step: skipped if the file already exists — re-running would
@@ -111,6 +121,8 @@ else
     echo "$s=$(openssl rand -hex 32)" >> .secrets/prod.env
   done
   echo "GEMINI_API_KEY=" >> .secrets/prod.env   # edit the file: paste the AI Studio key after the =
+  # (Nothing to add here for a non-Google provider: the optional AI_* values
+  #  are set in the dashboard — see "Optional: non-Google AI provider" above.)
 fi
 
 # 2. Escrow the file in your password manager FIRST (see below), then push all six

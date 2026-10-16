@@ -23,6 +23,30 @@
       "GEMINI_API_KEY": {
         "description": "Google AI Studio key (aistudio.google.com), sent through your AI Gateway — free tier works."
       },
+      "AI_BASE_URL": {
+        "description": "Optional. Base URL of any OpenAI-compatible chat API (e.g. https://api.openai.com/v1). Unset = chat runs on Gemini as before."
+      },
+      "AI_API_KEY": {
+        "description": "Optional. Bearer key for the compatible provider; falls back to GEMINI_API_KEY. Leave both unset for keyless local endpoints."
+      },
+      "AI_MODEL": {
+        "description": "Optional. Chat model name for the compatible provider (e.g. gpt-4.1-mini). Required when AI_BASE_URL is set."
+      },
+      "AI_FALLBACK_MODEL": {
+        "description": "Optional. Second model tried when the provider is down, rate-limited, or the model is retired."
+      },
+      "AI_EMBED_BASE_URL": {
+        "description": "Optional. Embeddings base URL for a compatible provider. The literal \"native\" keeps Gemini embeddings while chat runs elsewhere."
+      },
+      "AI_EMBED_API_KEY": {
+        "description": "Optional. Bearer key for compatible embeddings; falls back to AI_API_KEY, then GEMINI_API_KEY. Keyless works."
+      },
+      "AI_EMBED_MODEL": {
+        "description": "Optional. Embeddings model for the compatible provider (e.g. text-embedding-3-small). Required when embeddings resolve to a compatible provider."
+      },
+      "AI_EMBED_DIMS": {
+        "description": "Optional. Embedding size 1-1536 (default 768). Must match your Vectorize index; changing it re-embeds stored facts over the next sweeps."
+      },
       "GITHUB_TOKEN": {
         "description": "(Optional) GitHub token for the activity connector — raises API rate limits."
       },

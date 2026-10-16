@@ -96,6 +96,23 @@ Everything the worker reads — the dashboard rows are what step 5 sets:
 
 No format requirements on the random strings — your password manager's generator is enough (**make every value different**). The same list, with descriptions, ships in `package.json` (`cloudflare.bindings`) — so Cloudflare setup flows know what to ask for.
 
+**Optional — run on any AI provider.** Chat (extraction and reasoning) and embeddings can each run on any OpenAI-compatible API — configuration only, no code:
+
+| Name | Set where | Value |
+| --- | --- | --- |
+| `AI_BASE_URL` | dashboard variable | any OpenAI-compatible chat base URL, e.g. `https://api.openai.com/v1` |
+| `AI_API_KEY` | dashboard secret | bearer key for that provider; falls back to `GEMINI_API_KEY`; leave both unset for keyless endpoints |
+| `AI_MODEL` | dashboard variable | chat model name (e.g. `gpt-4.1-mini`); required when `AI_BASE_URL` is set |
+| `AI_FALLBACK_MODEL` | dashboard variable, *optional* | second model tried when the provider is down or rate-limited |
+| `AI_EMBED_BASE_URL` | dashboard variable, *optional* | embeddings base URL; the literal `native` keeps Gemini embeddings |
+| `AI_EMBED_API_KEY` | dashboard secret, *optional* | bearer key for embeddings; falls back to `AI_API_KEY`, then `GEMINI_API_KEY` |
+| `AI_EMBED_MODEL` | dashboard variable, *optional* | embeddings model (e.g. `text-embedding-3-small`); required when embeddings resolve to a compatible provider |
+| `AI_EMBED_DIMS` | dashboard variable, *optional* | embedding size 1–1536 (default 768); must match your Vectorize index |
+
+- **Nothing to do by default** — with no `AI_*` set, everything runs on Gemini exactly as before.
+- **To switch providers**, set the `AI_*` values in the dashboard; for a fully non-Google setup also delete `GEMINI_API_KEY` from `secrets.required` in `wrangler.jsonc` (one line) — or keep the key and pin `AI_EMBED_BASE_URL=native`.
+- **Changing the embedding model or size** re-embeds the stored backlog in the background over the next sweeps, and your prompts go only to the provider you configure.
+
 > [!TIP]
 > brain is designed for the Cloudflare **free plan** — an in-app budget breaker
 > pauses expensive writes at ~80k row-writes/day. Never run load tests against

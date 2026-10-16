@@ -10,6 +10,11 @@ Pre-1.0: minor versions may change behavior; patch versions are fixes only.
 
 ### Added
 
+- Run on any OpenAI-compatible AI provider (chat and/or embeddings) with env
+  vars only — `AI_BASE_URL` / `AI_MODEL` and friends, set in the dashboard;
+  Gemini remains the default, and switching the embedding model or size
+  re-embeds stored facts in the background. `GET /v1/health-report` now also
+  reports the resolved AI wiring and the re-embed backlog.
 - The setup guide now walks the Workers Builds dashboard import flow —
   project name, build / deploy / preview field values, preview builds off —
   in [`docs/setup.md`](docs/setup.md) §6.
