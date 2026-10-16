@@ -3,6 +3,9 @@
 Personal neural memory for OpenCode sessions — capture, redact, encrypt at rest,
 search, and recall into future sessions. Runs on Cloudflare Workers (D1 + R2).
 
+[![CI](https://github.com/taxin-404/brain/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/taxin-404/brain/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 **Status: Phase 0 delivered & live · Phase 1 complete · Phase 2 (semantic) complete · Phase 3 (truth) complete** — the
 memory layer extracts durable facts through the AI Gateway, blends semantic + keyword
 search, lands reviewable proposals, and applies them through a reversible review engine
@@ -249,6 +252,10 @@ inspector.
 | `.superpowers/sdd/2026-10-15-brain-phase-0-1/task-N-brief.md` | Per-task briefs (interfaces, verbatim tests) |
 | [`docs/key-rotation.md`](docs/key-rotation.md) | PAYLOAD_KEK rotation procedure |
 | [`docs/setup.md`](docs/setup.md) | From-zero setup — resources, secrets, deploy, client wiring, verification, troubleshooting |
+| [`docs/maintenance.md`](docs/maintenance.md) | Releases, CI map, related-project sync (mem0, terabox, superpowers) |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | Dev loop, gates, repo anatomy, PR flow |
+| [`SECURITY.md`](SECURITY.md) | Private vulnerability reporting |
+| [`CHANGELOG.md`](CHANGELOG.md) | Release history (Keep a Changelog) |
 
 ## Layout
 
@@ -260,7 +267,9 @@ src/            Worker source — routes, auth, crypto, redact, budget, ingest,
 migrations/     D1 schema 0001–0006 (wrangler d1 migrations apply)
 test/           vitest suite (@cloudflare/vitest-plugin, D1 via miniflare)
 plugin/         OpenCode capture plugin — event-sourced capture + diagnostics (Tasks 13–14)
-docs/           spec + plans + setup guide + key rotation
+docs/           spec + plans + setup + key rotation + maintenance
+eval/           JSON fixtures for the eval tests (keyword / semantic / forget)
+.github/        CI workflow (PRs + master), issue/PR templates, Dependabot
 wrangler.jsonc  Worker config: D1 brain-db, R2 brain-raw, crons (*/30 sweep,
                 nightly consolidation, weekly/monthly reflections),
                 keep_vars + secrets.required (see Deploy & CI)
@@ -272,13 +281,15 @@ wrangler.jsonc  Worker config: D1 brain-db, R2 brain-raw, crons (*/30 sweep,
 npm install
 npx vitest run        # full Worker suite
 npx tsc --noEmit      # typecheck
-npx wrangler dev      # local worker (create .dev.vars from vitest.config.ts bindings)
+npx wrangler dev      # local worker (copy .dev.vars.example to .dev.vars)
 
-cd plugin && npm i && npx vitest run   # capture plugin tests
+cd plugin && npm ci && npx vitest run   # capture plugin tests
 ```
 
 Dev-only tokens (`dev-kek`, `dev-hmac`, `dev-read`, `dev-propose`, `dev-admin`)
 live in `vitest.config.ts` miniflare bindings — the suite runs from a fresh clone.
+Contribution flow and gates: [`CONTRIBUTING.md`](CONTRIBUTING.md). From-zero
+deploy on your own account: [`docs/setup.md`](docs/setup.md).
 
 ## Ops facts
 
@@ -290,7 +301,10 @@ live in `vitest.config.ts` miniflare bindings — the suite runs from a fresh cl
 ## Deploy & CI (Cloudflare Workers Builds)
 
 Pushing to `master` makes Cloudflare build and deploy `brain-api` automatically
-(GitHub repo `taxin-404/brain`, production branch `master`).
+(GitHub repo `taxin-404/brain`, production branch `master`). Pull requests
+additionally run the same suite on GitHub Actions
+([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) — no secrets, nothing
+live.
 
 - **Build command:** `npm ci && npm test` — a red test suite blocks the deploy.
 - **Deploy command:** `npx wrangler deploy --env=""` — the trailing `--env=""`
