@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { healthReport } from "../src/health";
-import { bearer, call, installFakeVectorize } from "./helpers";
+import { bearer, call, installFakeVectorize, seedFact, setEnvVars } from "./helpers";
 
 describe("health report (phase 4 fields)", () => {
   beforeEach(() => {
@@ -45,5 +45,41 @@ describe("health report (phase 4 fields)", () => {
     const body = await res.json<{ consolidation: { last_run: { id: string } | null }; reflections: number }>();
     expect(body.consolidation.last_run?.id).toBe("run-new");
     expect(body.reflections).toBe(1);
+  });
+
+  it("reports the AI wiring (native defaults)", async () => {
+    const report = await healthReport(env);
+    expect(report.ai.chat).toEqual({
+      mode: "native",
+      model: "gemini-3.5-flash-lite",
+      fallback_model: "gemini-3.1-flash-lite",
+    });
+    expect(report.ai.embed).toEqual({
+      mode: "native",
+      model: "gemini-embedding-001",
+      dims: 768,
+      signature: "gemini-embedding-001@768",
+      index_dims: 768,
+      matches_index: true,
+    });
+    expect(report.ai.reembed_backlog).toBe(0);
+  });
+
+  it("counts the re-embed backlog", async () => {
+    await seedFact({ name: "backlog", predicate: "waits", object: "for a vector" });
+    const report = await healthReport(env);
+    expect(report.ai.reembed_backlog).toBeGreaterThanOrEqual(1);
+  });
+
+  it("keeps the route up when AI config is broken", async () => {
+    setEnvVars({ AI_BASE_URL: "https://oai.test/v1" }); // no AI_MODEL -> chat config error
+    try {
+      const res = await call("GET", "/v1/health-report", undefined, bearer(env, "MCP_READ"));
+      expect(res.status).toBe(200);
+      const body = await res.json<{ ai: { chat: { error?: string; mode?: string } } }>();
+      expect(body.ai.chat.error).toMatch(/AI_MODEL/);
+    } finally {
+      setEnvVars({ AI_BASE_URL: undefined });
+    }
   });
 });
