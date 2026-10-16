@@ -352,4 +352,50 @@ describe("export — resumable jobs (free-plan subrequest ceiling)", () => {
     for (const id of seeded) expect(seen.get(id)).toBe(1);
     for (const n of seen.values()) expect(n).toBe(1);
   });
+
+  it("caps backup payload pages even when ?limit=500 is requested (CPU ceiling)", async () => {
+    // ?limit=500 used to flow straight into the payload page: b64encoding 500
+    // objects (~2.5 MB) breaches the 10 ms CPU ceiling (live 1102-class
+    // failures). A backup page must clamp to BACKUP_PAYLOAD_PAGE (200).
+    const batch: EventInput[] = Array.from({ length: 205 }, (_, i) => ({
+      source: "manual",
+      actor: "user",
+      kind: "note",
+      excerpt: `page-cap ${i}`,
+      payload: { i },
+    }));
+    await ingestEvents(env, "ADMIN", batch);
+
+    const payloadRowCount = async (job: string): Promise<number> => {
+      const keys = (await listParts(job)).objects.filter((o) => o.key.endsWith(".ndjson")).map((o) => o.key);
+      let n = 0;
+      for (const k of keys) {
+        const t = await (await env.BRAIN_RAW.get(k))!.text();
+        for (const l of t.split("\n").filter(Boolean)) {
+          const j = JSON.parse(l) as { table?: string; rows?: unknown[] };
+          if (j.table === "r2_payloads") n += j.rows?.length ?? 0;
+        }
+      }
+      return n;
+    };
+
+    const first = await call("GET", "/v1/export?profile=backup&limit=500", undefined, bearer(env, "ADMIN"));
+    expect(first.status).toBe(200);
+    let view = await first.json<{ job: string; done: boolean; url: string }>();
+
+    let maxPayloadDelta = 0;
+    let calls = 0;
+    while (!view.done && calls < 40) {
+      const before = await payloadRowCount(view.job);
+      const res = await call("GET", `/v1/export?job=${view.job}&limit=500`, undefined, bearer(env, "ADMIN"));
+      expect(res.status).toBe(200);
+      view = await res.json();
+      const after = await payloadRowCount(view.job);
+      maxPayloadDelta = Math.max(maxPayloadDelta, after - before);
+      calls += 1;
+    }
+    expect(view.done).toBe(true);
+    // A full clamped page still ships (200 rows), but never more.
+    expect(maxPayloadDelta).toBe(200);
+  });
 });

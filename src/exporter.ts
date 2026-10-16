@@ -47,6 +47,10 @@ export const MAX_EXPORT_SLICE = 500;
 /** Portable decrypts have real per-object CPU cost on the free plan (10 ms);
  *  keep the payload page under the backup default. */
 const PORTABLE_PAYLOAD_PAGE = 100;
+// Backup payload pages are bounded too: b64encoding 500 objects (~2.5 MB)
+// breaches the free-plan 10 ms CPU ceiling (observed 1102-class failures with
+// ?limit=500). 200 is the proven-safe default slice.
+const BACKUP_PAYLOAD_PAGE = 200;
 /** Table rows stringified per invocation (1 MB in one call flaked 1102). */
 const TABLES_ROWS_PER_CALL = 400;
 const DEFAULT_RESTORE_SLICE = 800;
@@ -410,7 +414,7 @@ async function exportSlice(env: Env, job: string, meta: ExportMeta, slice: numbe
 
   // Raw payload objects (R2): one bounded page per invocation. Backup ships
   // ciphertext; portable decrypts with the KEK + wrapped key per event.
-  const page = profile === "portable" ? Math.min(slice, PORTABLE_PAYLOAD_PAGE) : slice;
+  const page = Math.min(slice, profile === "portable" ? PORTABLE_PAYLOAD_PAGE : BACKUP_PAYLOAD_PAGE);
   const list = await env.BRAIN_RAW.list({ prefix: "payloads/", cursor: meta.cursor ?? undefined, limit: page });
   const wrappedKeys = profile === "portable" && list.objects.length > 0 ? await loadWrappedKeys(env) : null;
   const kek = profile === "portable" && list.objects.length > 0 ? await payloadKek(env.PAYLOAD_KEK) : null;
