@@ -400,6 +400,7 @@ async function exportSlice(env: Env, job: string, meta: ExportMeta, slice: numbe
     await flush();
     const next: ExportMeta = {
       ...meta,
+      exp: Date.now() + EXPORT_TTL_MS,
       header: true,
       tables: false,
       table_index: ti,
@@ -444,6 +445,11 @@ async function exportSlice(env: Env, job: string, meta: ExportMeta, slice: numbe
   const cursor = list.truncated ? (list.cursor ?? null) : null;
   const next: ExportMeta = {
     ...meta,
+    // Every driven slice renews the link: 200 sequential R2 gets per payload
+    // page mean large walks take longer than a single TTL window, and a
+    // finished-but-expired artifact is unreachable. Abandoned jobs stop
+    // renewing and still expire normally.
+    exp: Date.now() + EXPORT_TTL_MS,
     header: true,
     tables: true,
     table_index: ti,
@@ -461,7 +467,7 @@ async function exportSlice(env: Env, job: string, meta: ExportMeta, slice: numbe
       action: "export",
       targetType: "export",
       targetId: job,
-      after: { profile, exp: meta.exp, parts: seq },
+      after: { profile, exp: next.exp, parts: seq },
       reason: "",
     });
   }

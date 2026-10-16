@@ -398,4 +398,20 @@ describe("export — resumable jobs (free-plan subrequest ceiling)", () => {
     // A full clamped page still ships (200 rows), but never more.
     expect(maxPayloadDelta).toBe(200);
   });
+
+  it("refreshes the link TTL on every resume (slow walks outlive any single window)", async () => {
+    // 200 sequential R2 gets per payload page make multi-thousand-payload
+    // walks take longer than one TTL window; the link must stay alive while
+    // the job is being driven, or a finished artifact is unreachable.
+    await seedEvent("ttl a", { ttl: 1 });
+    await seedEvent("ttl b", { ttl: 2 });
+    const first = await call("GET", "/v1/export?profile=backup&limit=1", undefined, bearer(env, "ADMIN"));
+    const b1 = await first.json<{ job: string; done: boolean; expires_at: number; url: string }>();
+    expect(b1.done).toBe(false);
+
+    await new Promise((r) => setTimeout(r, 50));
+    const second = await call("GET", `/v1/export?job=${b1.job}&limit=1`, undefined, bearer(env, "ADMIN"));
+    const b2 = await second.json<{ done: boolean; expires_at: number; url: string }>();
+    expect(b2.expires_at).toBeGreaterThan(b1.expires_at);
+  });
 });
