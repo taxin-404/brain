@@ -21,7 +21,7 @@ Pre-flight: no blocking conflicts.
 - [x] Task 4 — Signature-aware backfill + index guard
 - [x] Task 5 — Health: report the AI wiring
 - [x] Task 6 — Bindings chart + docs
-- [ ] Task 7 — Push, live verification, ledger
+- [x] Task 7 — Push, live verification, ledger
 
 ## Log
 
@@ -53,4 +53,12 @@ Review: fresh-context over `34be8d4..6742b8e` → BLOCKING (1 major + 2 minor); 
 
 Rulings if wrong (cost): the dims-guard throws config errors on a mismatch instead of embedding anyway (worst case: embedding silently paused until AI_EMBED_DIMS is fixed — visible in /v1/health-report); the extract try/catch logs `[embed] skipped:` and keeps extraction green (worst case: one sweep's embeddings deferred); empty-string envs behave as unset (worst case: a dashboard var set to "" is ignored rather than rejected).
 
-Push (plan `34be8d4` + tasks 1-6 + fix `29bb344` + this ledger commit): verification appended below after watching the push.
+Push (plan `34be8d4` + tasks 1-6 + fix `29bb344` + this ledger commit `d07852a`): GitHub Actions run [38908904850](https://github.com/taxin-404/brain/actions/runs/38908904850) — success; Workers Builds `ae96c3b2-6f14-4566-bb8f-403dc829d738` — build + deploy success.
+
+Prod checks (deployed `ae96c3b2…`, single-shot, tokens never printed):
+
+- `GET /v1/health-report` → 200; `ai.chat` native (`gemini-3.5-flash-lite`, fallback `gemini-3.1-flash-lite`); `ai.embed` native, dims 768, signature `gemini-embedding-001@768`, index_dims 768, matches_index true; `reembed_backlog` 0 (correct: pristine default means pre-signature bare rows count as current).
+- `GET /v1/search?q=user&limit=5` → 200, 5 facts, no `degraded` — native recall path unaffected.
+- The live `describe()` shape resolved through `readIndexDims` (index_dims 768) — finding 3's version tolerance validated deployed.
+
+This ledger commit's own verification (CI + build for `d07852a..`) folds into the next session, per the cycle pattern.
