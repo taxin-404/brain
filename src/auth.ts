@@ -3,9 +3,11 @@ import { canAdmin, canPropose, canRead } from "./env";
 
 export function resolveScope(request: Request, env: Env): Scope | null {
   const header = request.headers.get("authorization");
-  if (header === `Bearer ${env.ADMIN_TOKEN}`) return "ADMIN";
-  if (header === `Bearer ${env.MCP_PROPOSE_TOKEN}`) return "MCP_PROPOSE";
-  if (header === `Bearer ${env.MCP_READ_TOKEN}`) return "MCP_READ";
+  // A missing (or empty) secret must never match: with ADMIN_TOKEN unset, the
+  // literal `Bearer undefined` would otherwise authenticate as ADMIN.
+  if (env.ADMIN_TOKEN && header === `Bearer ${env.ADMIN_TOKEN}`) return "ADMIN";
+  if (env.MCP_PROPOSE_TOKEN && header === `Bearer ${env.MCP_PROPOSE_TOKEN}`) return "MCP_PROPOSE";
+  if (env.MCP_READ_TOKEN && header === `Bearer ${env.MCP_READ_TOKEN}`) return "MCP_READ";
   return null;
 }
 

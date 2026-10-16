@@ -1,12 +1,30 @@
 import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import { dayKey } from "../src/budget";
-import { bearer, call } from "./helpers";
+import { bearer, call, setEnvVars } from "./helpers";
 
 describe("auth + health", () => {
   it("rejects missing and unknown tokens with 401", async () => {
     expect((await call("GET", "/v1/health-report")).status).toBe(401);
     expect((await call("GET", "/v1/health-report", undefined, { authorization: "Bearer nope" })).status).toBe(401);
+  });
+
+  it("never matches Bearer tokens against unset or empty secrets", async () => {
+    const original = {
+      ADMIN_TOKEN: env.ADMIN_TOKEN,
+      MCP_PROPOSE_TOKEN: env.MCP_PROPOSE_TOKEN,
+      MCP_READ_TOKEN: env.MCP_READ_TOKEN,
+    };
+    try {
+      setEnvVars({ ADMIN_TOKEN: undefined, MCP_PROPOSE_TOKEN: undefined, MCP_READ_TOKEN: undefined });
+      // `Bearer undefined` is not a credential — no token set means no access.
+      expect((await call("GET", "/v1/health-report", undefined, { authorization: "Bearer undefined" })).status).toBe(401);
+      // An empty-string secret must not match `Bearer ` either.
+      setEnvVars({ MCP_READ_TOKEN: "" });
+      expect((await call("GET", "/v1/health-report", undefined, { authorization: "Bearer " })).status).toBe(401);
+    } finally {
+      setEnvVars(original);
+    }
   });
 
   it("rejects insufficient scope with 403 (strict: propose is not read)", async () => {
