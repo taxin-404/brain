@@ -1,7 +1,18 @@
 import { env } from "cloudflare:workers";
 import { http, HttpResponse } from "msw";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import { embedTexts, geminiJson, LlmError } from "../src/llm";
+import type { Env } from "../src/env";
+import {
+  chatConfig,
+  embedConfig,
+  EMBEDDING_MODEL,
+  embeddingSignature,
+  embedTexts,
+  EXTRACTION_FALLBACK_MODEL,
+  EXTRACTION_MODEL,
+  geminiJson,
+  LlmError,
+} from "../src/llm";
 import { network } from "./server";
 
 const GEN_URL = "https://gw.test/google-ai-studio/v1beta/models/gemini-3.5-flash-lite:generateContent";
@@ -219,5 +230,157 @@ describe("llm via ai gateway", () => {
     const e = new LlmError("network", "x");
     expect(e).toBeInstanceOf(Error);
     expect(e.name).toBe("LlmError");
+  });
+});
+
+describe("ai provider config resolution", () => {
+  const configError = (fn: () => unknown): LlmError => {
+    try {
+      fn();
+    } catch (e) {
+      if (e instanceof LlmError) return e;
+      throw e;
+    }
+    throw new Error("expected a config error");
+  };
+
+  it("resolves the Gemini-native chat path by default", () => {
+    const cfg = chatConfig({ AI_GATEWAY_BASE: "https://gw.test/x", GEMINI_API_KEY: "g" } as unknown as Env);
+    expect(cfg).toEqual({
+      mode: "native",
+      base: "https://gw.test/x",
+      key: "g",
+      model: EXTRACTION_MODEL,
+      fallback: EXTRACTION_FALLBACK_MODEL,
+    });
+  });
+
+  it("switches chat to a compatible provider when AI_BASE_URL is set", () => {
+    const cfg = chatConfig({
+      AI_BASE_URL: "https://api.test/v1/",
+      AI_API_KEY: "sk-test",
+      AI_MODEL: "oai-model",
+      AI_FALLBACK_MODEL: "oai-fallback",
+    } as unknown as Env);
+    expect(cfg).toEqual({
+      mode: "compat",
+      base: "https://api.test/v1",
+      key: "sk-test",
+      model: "oai-model",
+      fallback: "oai-fallback",
+    });
+  });
+
+  it("falls back to GEMINI_API_KEY as the compat key", () => {
+    const cfg = chatConfig({ AI_BASE_URL: "https://api.test/v1", AI_MODEL: "m", GEMINI_API_KEY: "g" } as unknown as Env);
+    expect(cfg.key).toBe("g");
+  });
+
+  it("resolves keyless compat when no key is set", () => {
+    const cfg = chatConfig({ AI_BASE_URL: "https://api.test/v1", AI_MODEL: "m" } as unknown as Env);
+    expect(cfg.key).toBeUndefined();
+  });
+
+  it("requires AI_MODEL when AI_BASE_URL is set", () => {
+    const err = configError(() => chatConfig({ AI_BASE_URL: "https://api.test/v1" } as unknown as Env));
+    expect(err.code).toBe("config");
+    expect(err.message).toMatch(/AI_MODEL/);
+  });
+
+  it("requires AI_GATEWAY_BASE for the native chat path", () => {
+    const err = configError(() => chatConfig({ GEMINI_API_KEY: "g" } as unknown as Env));
+    expect(err.code).toBe("config");
+    expect(err.message).toMatch(/AI_GATEWAY_BASE/);
+  });
+
+  it("resolves native embeddings by default", () => {
+    const cfg = embedConfig({ AI_GATEWAY_BASE: "https://gw.test/x", GEMINI_API_KEY: "g" } as unknown as Env);
+    expect(cfg).toEqual({
+      mode: "native",
+      base: "https://gw.test/x",
+      key: "g",
+      model: EMBEDDING_MODEL,
+      dims: 768,
+      dimsExplicit: false,
+      signature: "gemini-embedding-001@768",
+    });
+  });
+
+  it("inherits the compat chat base for embeddings and requires AI_EMBED_MODEL", () => {
+    const err = configError(() =>
+      embedConfig({ AI_BASE_URL: "https://api.test/v1", AI_MODEL: "m", GEMINI_API_KEY: "g" } as unknown as Env),
+    );
+    expect(err.code).toBe("config");
+    expect(err.message).toMatch(/AI_EMBED_MODEL/);
+    const cfg = embedConfig({
+      AI_BASE_URL: "https://api.test/v1",
+      AI_MODEL: "m",
+      GEMINI_API_KEY: "g",
+      AI_EMBED_MODEL: "text-embedding-3-small",
+    } as unknown as Env);
+    expect(cfg).toEqual({
+      mode: "compat",
+      base: "https://api.test/v1",
+      key: "g",
+      model: "text-embedding-3-small",
+      dims: 768,
+      dimsExplicit: false,
+      signature: "text-embedding-3-small@768",
+    });
+  });
+
+  it("keeps Gemini embeddings when AI_EMBED_BASE_URL is the native sentinel", () => {
+    const cfg = embedConfig({
+      AI_BASE_URL: "https://api.test/v1",
+      AI_MODEL: "m",
+      AI_EMBED_BASE_URL: "native",
+      AI_GATEWAY_BASE: "https://gw.test/x",
+      GEMINI_API_KEY: "g",
+    } as unknown as Env);
+    expect(cfg.mode).toBe("native");
+    expect(cfg.model).toBe(EMBEDDING_MODEL);
+  });
+
+  it("resolves an embeddings-only compatible provider", () => {
+    const cfg = embedConfig({
+      AI_EMBED_BASE_URL: "https://emb.test/v1",
+      AI_EMBED_MODEL: "bge-m3",
+      AI_EMBED_API_KEY: "ek",
+    } as unknown as Env);
+    expect(cfg).toEqual({
+      mode: "compat",
+      base: "https://emb.test/v1",
+      key: "ek",
+      model: "bge-m3",
+      dims: 768,
+      dimsExplicit: false,
+      signature: "bge-m3@768",
+    });
+  });
+
+  it("parses AI_EMBED_DIMS into the signature", () => {
+    const cfg = embedConfig({
+      AI_GATEWAY_BASE: "https://gw.test/x",
+      GEMINI_API_KEY: "g",
+      AI_EMBED_DIMS: "1536",
+    } as unknown as Env);
+    expect(cfg.dims).toBe(1536);
+    expect(cfg.dimsExplicit).toBe(true);
+    expect(cfg.signature).toBe("gemini-embedding-001@1536");
+  });
+
+  it("rejects a bad AI_EMBED_DIMS", () => {
+    for (const raw of ["abc", "0", "1537"]) {
+      const err = configError(() =>
+        embedConfig({ AI_EMBED_DIMS: raw, AI_GATEWAY_BASE: "x", GEMINI_API_KEY: "g" } as unknown as Env),
+      );
+      expect(err.code).toBe("config");
+      expect(err.message).toMatch(/AI_EMBED_DIMS/);
+    }
+  });
+
+  it("exposes the signature via embeddingSignature", () => {
+    const e = { AI_GATEWAY_BASE: "https://gw.test/x", GEMINI_API_KEY: "g" } as unknown as Env;
+    expect(embeddingSignature(e)).toBe(embedConfig(e).signature);
   });
 });

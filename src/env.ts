@@ -16,6 +16,22 @@ export interface Env {
   GEMINI_API_KEY: string;
   /** Optional: raises GitHub API rate limits for the connector; unauthenticated works for public repos. */
   GITHUB_TOKEN?: string;
+  /** Optional: base URL of any OpenAI-compatible chat API (e.g. https://api.openai.com/v1). Set = run chat on that provider instead of Gemini. */
+  AI_BASE_URL?: string;
+  /** Optional: bearer key for the compatible chat provider; falls back to GEMINI_API_KEY. Unset both for keyless endpoints. */
+  AI_API_KEY?: string;
+  /** Optional: chat model for the compatible provider (e.g. gpt-4.1-mini); required when AI_BASE_URL is set. */
+  AI_MODEL?: string;
+  /** Optional: second chat model tried when the provider is down, rate-limited, or the model is retired. */
+  AI_FALLBACK_MODEL?: string;
+  /** Optional: embeddings base URL for a compatible provider; the literal "native" forces the Gemini embeddings path. */
+  AI_EMBED_BASE_URL?: string;
+  /** Optional: bearer key for compatible embeddings; falls back to AI_API_KEY, then GEMINI_API_KEY. */
+  AI_EMBED_API_KEY?: string;
+  /** Optional: embeddings model for the compatible provider; required when embeddings resolve to a compatible provider. */
+  AI_EMBED_MODEL?: string;
+  /** Optional: expected embedding size (integer 1-1536, default 768). Must match the Vectorize index; changing it re-embeds stored facts. */
+  AI_EMBED_DIMS?: string;
 }
 export const TRUST = { user: 1.0, assistant: 0.9, tool: 0.7, external: 0.4 } as const;
 export function canRead(scope: Scope): boolean {

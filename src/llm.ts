@@ -2,7 +2,7 @@ import type { Env } from "./env";
 
 export class LlmError extends Error {
   constructor(
-    readonly code: "http" | "network" | "parse",
+    readonly code: "http" | "network" | "parse" | "config",
     message: string,
     readonly status?: number,
   ) {
@@ -19,6 +19,115 @@ export const EXTRACTION_FALLBACK_MODEL = "gemini-3.1-flash-lite";
 export const EMBEDDING_MODEL = "gemini-embedding-001";
 export const EMBEDDING_DIMS = 768;
 export const EMBED_CHUNK = 10;
+
+export interface ChatConfig {
+  mode: "native" | "compat";
+  base: string;
+  key?: string;
+  model: string;
+  fallback?: string;
+}
+
+export interface EmbedConfig {
+  mode: "native" | "compat";
+  base: string;
+  key?: string;
+  model: string;
+  dims: number;
+  dimsExplicit: boolean;
+  signature: string;
+}
+
+/** First value that is neither undefined nor "" (empty env vars count as unset). */
+const firstSet = (...values: Array<string | undefined>): string | undefined =>
+  values.find((v) => v !== undefined && v !== "");
+
+const stripTrailingSlashes = (url: string): string => url.replace(/\/+$/, "");
+
+const GEMINI_PATH_HINT = " (or set AI_BASE_URL for a compatible provider)";
+
+/** Resolve the chat path from env. No AI_BASE_URL = the Gemini-native path. */
+export function chatConfig(env: Env): ChatConfig {
+  if (env.AI_BASE_URL) {
+    if (!env.AI_MODEL) {
+      throw new LlmError("config", "AI_MODEL is required when AI_BASE_URL is set");
+    }
+    return {
+      mode: "compat",
+      base: stripTrailingSlashes(env.AI_BASE_URL),
+      key: firstSet(env.AI_API_KEY, env.GEMINI_API_KEY),
+      model: env.AI_MODEL,
+      fallback: env.AI_FALLBACK_MODEL,
+    };
+  }
+  if (!env.AI_GATEWAY_BASE) {
+    throw new LlmError("config", `AI_GATEWAY_BASE is required for the Gemini path${GEMINI_PATH_HINT}`);
+  }
+  if (!env.GEMINI_API_KEY) {
+    throw new LlmError("config", `GEMINI_API_KEY is required for the Gemini path${GEMINI_PATH_HINT}`);
+  }
+  return {
+    mode: "native",
+    base: env.AI_GATEWAY_BASE,
+    key: env.GEMINI_API_KEY,
+    model: EXTRACTION_MODEL,
+    fallback: EXTRACTION_FALLBACK_MODEL,
+  };
+}
+
+/** Resolve the embeddings path from env. Independent of chat except that
+ *  embeddings without their own base URL inherit a compat chat base; the
+ *  literal "native" sentinel keeps Gemini embeddings regardless. */
+export function embedConfig(env: Env): EmbedConfig {
+  const dimsRaw = env.AI_EMBED_DIMS;
+  let dims = EMBEDDING_DIMS;
+  if (dimsRaw !== undefined) {
+    const n = Number(dimsRaw);
+    if (!Number.isInteger(n) || n < 1 || n > 1536) {
+      throw new LlmError("config", `AI_EMBED_DIMS must be an integer from 1 to 1536 (got "${dimsRaw}")`);
+    }
+    dims = n;
+  }
+  const base = env.AI_EMBED_BASE_URL === "native" ? undefined : env.AI_EMBED_BASE_URL ?? env.AI_BASE_URL;
+  if (base) {
+    if (!env.AI_EMBED_MODEL) {
+      throw new LlmError(
+        "config",
+        "AI_EMBED_MODEL is required when the embedding path uses a compatible provider (set AI_EMBED_BASE_URL=native to keep Gemini embeddings)",
+      );
+    }
+    return {
+      mode: "compat",
+      base: stripTrailingSlashes(base),
+      key: firstSet(env.AI_EMBED_API_KEY, env.AI_API_KEY, env.GEMINI_API_KEY),
+      model: env.AI_EMBED_MODEL,
+      dims,
+      dimsExplicit: dimsRaw !== undefined,
+      signature: `${env.AI_EMBED_MODEL}@${dims}`,
+    };
+  }
+  if (!env.AI_GATEWAY_BASE) {
+    throw new LlmError("config", `AI_GATEWAY_BASE is required for the Gemini path${GEMINI_PATH_HINT}`);
+  }
+  if (!env.GEMINI_API_KEY) {
+    throw new LlmError("config", `GEMINI_API_KEY is required for the Gemini path${GEMINI_PATH_HINT}`);
+  }
+  return {
+    mode: "native",
+    base: env.AI_GATEWAY_BASE,
+    key: env.GEMINI_API_KEY,
+    model: EMBEDDING_MODEL,
+    dims,
+    dimsExplicit: dimsRaw !== undefined,
+    signature: `${EMBEDDING_MODEL}@${dims}`,
+  };
+}
+
+/** The `{model}@{dims}` identity stamped on facts and vectors; the backfill
+ *  re-embeds when a fact's stored value differs. */
+export function embeddingSignature(env: Env): string {
+  return embedConfig(env).signature;
+}
 
 const MAX_ATTEMPTS = 3;
 const RETRY_BASE_MS = 500;
