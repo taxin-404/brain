@@ -61,4 +61,4 @@ Prod checks (deployed `ae96c3b2…`, single-shot, tokens never printed):
 - `GET /v1/search?q=user&limit=5` → 200, 5 facts, no `degraded` — native recall path unaffected.
 - The live `describe()` shape resolved through `readIndexDims` (index_dims 768) — finding 3's version tolerance validated deployed.
 
-This ledger commit's own verification (CI + build for `d07852a..`) folds into the next session, per the cycle pattern.
+This ledger commit's own verification: CI run [38909478720](https://github.com/taxin-404/brain/actions/runs/38909478720) — success; Workers Builds `dbea7304` — build + deploy success (commit `256a054`), verified 2026-10-16.
