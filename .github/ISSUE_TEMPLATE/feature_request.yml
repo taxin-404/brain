@@ -1,0 +1,30 @@
+name: Feature request
+description: Propose a behavior change or a new capability
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Behavior changes here start from the design, not the code:
+        [`docs/design-v1.2.md`](https://github.com/taxin-404/brain/blob/master/docs/design-v1.2.md)
+        is the authority, and the phase plans in `docs/plans/` show how work
+        is cut into tasks. A good request argues from the design.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What can't you do today, or what breaks?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Sketch the interface (route, MCP tool, cron) and the tradeoffs.
+    validations:
+      required: true
+  - type: textarea
+    id: design-refs
+    attributes:
+      label: Design references (optional)
+      description: Sections of the design doc or phase plans this touches.

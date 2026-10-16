@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Setup & deployment guide
+    url: https://github.com/taxin-404/brain/blob/master/docs/setup.md
+    about: Deploying your own copy — resources, secrets, client wiring, verification
+  - name: Security report
+    url: https://github.com/taxin-404/brain/security/advisories/new
+    about: Report a vulnerability privately — never in a public issue

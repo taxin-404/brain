@@ -1,0 +1,40 @@
+name: Bug report
+description: Something is broken in the worker, the capture plugin, MCP, or the docs
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before filing, two rules keep this project safe:
+
+        - **Never** point load tests, loops, or fuzzers at the deployed worker (`*.workers.dev`) — the account is on Cloudflare's free tier.
+        - **Never** paste secrets, tokens, or captured personal content into an issue; redact, or recreate it with the public `dev-*` fixtures.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you expect instead?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How to reproduce
+      description: Prefer a failing `npx vitest run` test, or a minimal curl using `dev-*` tokens.
+      placeholder: |
+        1. ...
+        2. ...
+    validations:
+      required: true
+  - type: input
+    id: area
+    attributes:
+      label: Area
+      placeholder: worker route / capture plugin / MCP tool / CI / docs
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      placeholder: |
+        node / wrangler / typescript versions
+        anything else relevant (e.g. errors from the workerd output)
