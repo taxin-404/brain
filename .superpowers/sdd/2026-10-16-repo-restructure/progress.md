@@ -121,3 +121,25 @@ record.
     — success (both jobs); Workers Builds
     `361b0a16-1b51-4b59-92d1-53c0bae47454` — 236/236 tests, build + deploy
     success, `"success":true` (version `5f423e5e-59bc-4402-8742-8a31b3d25133`).
+- 2026-10-16: product README close-out (`79e23a6`, deferred earlier): GitHub
+  Actions run
+  [38874219112](https://github.com/taxin-404/brain/actions/runs/38874219112)
+  — success; Workers Builds `72f35800-0ce2-4a8c-8e45-a13e97d4a585` — build +
+  deploy success.
+- 2026-10-16: owner asked for "the envs chart" (missing from the dashboard
+  walkthrough). Action taken (docs/config only — no runtime code touched):
+  - `package.json`: `cloudflare.bindings` block (the NodeWarden mechanism) with
+    descriptions for every env the worker reads — list audited from `src/`
+    (8 envs including optional `GITHUB_TOKEN`; `BRAIN_DB`, `BRAIN_RAW`,
+    `VECTORIZE`).
+  - README *Visual quick deploy*: new **The envs** chart (name / set where /
+    value), step 5 now links to it; "any 32+ char random string" stated
+    (KEK SHA-256-stretched, tokens direct-compared — per `src/crypto.ts`).
+  - `docs/setup.md` §3: `GITHUB_TOKEN` row + no-format-requirements note;
+    `CHANGELOG.md` `[Unreleased]` updated.
+  - Pushed as `3e1ae63` (`79e23a6..3e1ae63`). Gate: 236/236 tests (39 files),
+    `tsc --noEmit` clean, `package.json` valid (11 bindings entries).
+    Verification: GitHub Actions run
+    [38875734550](https://github.com/taxin-404/brain/actions/runs/38875734550)
+    — success; Workers Builds `a1791be9-f6b8-46c6-89e7-98c820e4d849` — build +
+    deploy success.
