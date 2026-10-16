@@ -80,6 +80,12 @@ An existing prod backup artifact (7,854,315 bytes, 1 header + table lines +
    artifact that could never be downloaded while resumes kept reporting
    `running` — and the running job was seconds from being swept. Resumes now
    renew `exp`; abandoned jobs stop renewing and still expire normally.
+6. **Exports are not instantaneous snapshots.** Content tables are read during
+   the walk's table phase; payload pages keep streaming for minutes after
+   (200 gets/call). Events ingested mid-walk appear as payload objects whose
+   `event_keys` row was not yet in the table snapshot (11 occurred during the
+   drill's live walk) — restore carries them as harmless orphan blobs. For a
+   forensic-grade artifact, quiesce ingest or accept the skew.
 
 ## Free-tier discipline
 
