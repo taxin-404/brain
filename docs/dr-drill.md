@@ -73,6 +73,13 @@ An existing prod backup artifact (7,854,315 bytes, 1 header + table lines +
    `?limit=500` the payload page used to b64encode 500 objects (~2.5 MB) per
    call, breaching the 10 ms CPU ceiling in live testing (1102-class
    failures). Backup pages now clamp to the proven-safe 200.
+5. **Export links renew on every driven slice** (commit `4777823`). A payload
+   page costs ~28 s (200 *sequential* R2 gets), so large export walks can
+   outrun the 15-minute `EXPORT_TTL_MS`. The download token derives from
+   `meta.exp`, so a walk that outlived its window produced a finished
+   artifact that could never be downloaded while resumes kept reporting
+   `running` — and the running job was seconds from being swept. Resumes now
+   renew `exp`; abandoned jobs stop renewing and still expire normally.
 
 ## Free-tier discipline
 

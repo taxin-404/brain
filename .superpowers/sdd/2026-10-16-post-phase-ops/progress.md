@@ -25,6 +25,11 @@ Repair plan (F2-repair): re-encrypt the failing blobs offline from the original 
 - Upload: 1,768 files, 4× wrangler puts, retry-drain for flakes.
 - Post-verify plan: fresh export after uploads → re-run step-level split → expect `blob_fail ≈ 5` (the skipped); then reuse that artifact for the DR drill.
 
+## Export TTL race — found + fixed (2026-10-16, late)
+The post-repair verification export surfaced a real DR-path bug: its resume walk ran past `EXPORT_TTL_MS` (15 min). Every payload page costs ~28 s (200 **sequential** R2 gets), so multi-thousand-payload walks exceed one TTL window; the link token derives from `meta.exp`, so **a finished-but-slow artifact is unreachable (download 403) while resumes keep returning 200/running** — and the still-running job becomes sweep-fodder once `exp + grace` lapses. Root cause style: measured, not guessed (28.6 s single resume call; meta exp long past; job at parts 21, state running).
+Fix (commit `4777823`): every driven slice now renews `exp = now + EXPORT_TTL_MS`; abandoned jobs stop renewing and still expire/sweep normally. Test: resumed slice `expires_at` must exceed the previous one's. Full gate 236/236 + tsc.
+Consequence for repair verification: re-export re-split is superseded — **direct prod-side verification** instead: download all 1,768 repaired blobs from prod R2 (`--remote`) and byte-compare (`cmp`) against the HMAC-gated local files. No worker/CPU involvement at all.
+
 ## F2-repair upload — local/remote trap caught mid-flight (2026-10-16)
 The first upload drain "completed" 1,357/1,768 with 61 flakes — then the demand surfaced: **`wrangler r2 object put/get` default to the LOCAL simulation in this environment** (`--remote` required; without it objects land in `.wrangler/state/v3/r2/…` and CLI round-trips falsely succeed while the worker sees nothing). Discovered while debugging staged drill artifacts that the worker 404'd. All repair scripts fixed (`upload.sh`, `drill-restore.sh`), drain re-run clean: **1,768/1,768 remote, 0 failed**.
 Discrimination method (keep for ops): `wrangler r2 object get <bucket>/<key> --local` vs `--remote` on the same key.
