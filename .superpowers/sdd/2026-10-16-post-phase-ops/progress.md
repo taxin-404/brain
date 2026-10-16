@@ -80,3 +80,9 @@ Owner said "keep going" after the error triage. Closed the remaining verificatio
 
 ## First curation applied (owner-approved 2026-10-16)
 Owner approved both seeded proposals from chat. `POST /v1/proposals/:id/apply` returned `{"applied":true,"kind":"block_edit"}` for both; `GET /v1/blocks` now serves `active_projects` + `infrastructure` (the curated layer's first content), `pending_proposals: 0`, and MCP `get_blocks` reflects both. Full curation loop proven end-to-end: propose (MCP / MCP_PROPOSE) → review (REST / admin) → serve (MCP read).
+
+## GCP budget alert closed — free-tier decision (owner, 2026-10-16)
+Owner: "ok i will use free tier" → the Google Cloud budget alert owner-item is closed (no billing account = no dollar alerts needed). Consequences recorded:
+- **Data-use terms accepted:** Gemini API unpaid quota = Google may use submitted content + responses to improve products, and human reviewers may read them (55-day abuse-monitoring retention). Paid tier avoids product-improvement use. Design v1.2's "(paid)" intent is superseded by this directive; `restricted`-event exclusion and the redaction layer are unchanged.
+- **Rate-limit resilience verified in code:** 429/5xx retried x3 (500ms x attempt), then availability fallback `gemini-3.5-flash-lite` → `gemini-3.1-flash-lite`; extraction failures requeue as `pending` until the 3rd attempt then `failed`; embedding failures stay `vec_id NULL` and retry next sweep; manual kick `POST /v1/extract` re-runs the capped pipeline; health-report exposes `failed`.
+- README quota bullet updated from the $5/mo budget-alert claim to the free-tier reality.

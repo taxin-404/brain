@@ -28,7 +28,8 @@ the account's daily free request limit in seconds. No exceptions, ever:
   polling there minimal too.)
 - **Quotas to respect:** Workers 100k requests/day · D1 100k row-writes/day (the
   in-app `rate_budgets` breaker at 80k protects this) · Vectorize 5M stored dims ·
-  Queues 10k ops/day · Gemini calls under the Google Cloud budget alert (~$5/mo).
+  Queues 10k ops/day · Gemini calls on the API free tier (unpaid quota — Google
+  may use content to improve products; retries + model fallback absorb rate limits).
 
 ## Phase 2 (semantic)
 
