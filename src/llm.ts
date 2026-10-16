@@ -46,6 +46,14 @@ const stripTrailingSlashes = (url: string): string => url.replace(/\/+$/, "");
 
 const GEMINI_PATH_HINT = " (or set AI_BASE_URL for a compatible provider)";
 
+/** Direct Google endpoint — the native path's fallback when no AI Gateway is
+ *  configured, so forks work with zero URL config. */
+export const GEMINI_DIRECT_BASE = "https://generativelanguage.googleapis.com";
+
+/** The native Gemini base: the AI Gateway when configured (analytics, caching),
+ *  otherwise Google's API directly. */
+const nativeBase = (env: Env): string => env.AI_GATEWAY_BASE || GEMINI_DIRECT_BASE;
+
 /** Resolve the chat path from env. No AI_BASE_URL = the Gemini-native path. */
 export function chatConfig(env: Env): ChatConfig {
   if (env.AI_BASE_URL) {
@@ -60,15 +68,12 @@ export function chatConfig(env: Env): ChatConfig {
       fallback: env.AI_FALLBACK_MODEL,
     };
   }
-  if (!env.AI_GATEWAY_BASE) {
-    throw new LlmError("config", `AI_GATEWAY_BASE is required for the Gemini path${GEMINI_PATH_HINT}`);
-  }
   if (!env.GEMINI_API_KEY) {
     throw new LlmError("config", `GEMINI_API_KEY is required for the Gemini path${GEMINI_PATH_HINT}`);
   }
   return {
     mode: "native",
-    base: env.AI_GATEWAY_BASE,
+    base: nativeBase(env),
     key: env.GEMINI_API_KEY,
     model: EXTRACTION_MODEL,
     fallback: EXTRACTION_FALLBACK_MODEL,
@@ -107,15 +112,12 @@ export function embedConfig(env: Env): EmbedConfig {
       signature: `${env.AI_EMBED_MODEL}@${dims}`,
     };
   }
-  if (!env.AI_GATEWAY_BASE) {
-    throw new LlmError("config", `AI_GATEWAY_BASE is required for the Gemini path${GEMINI_PATH_HINT}`);
-  }
   if (!env.GEMINI_API_KEY) {
     throw new LlmError("config", `GEMINI_API_KEY is required for the Gemini path${GEMINI_PATH_HINT}`);
   }
   return {
     mode: "native",
-    base: env.AI_GATEWAY_BASE,
+    base: nativeBase(env),
     key: env.GEMINI_API_KEY,
     model: EMBEDDING_MODEL,
     dims,
@@ -150,7 +152,7 @@ async function postJson(env: Env, path: string, body: unknown): Promise<GeminiRe
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     let res: Response;
     try {
-      res = await fetch(`${env.AI_GATEWAY_BASE}${path}`, {
+      res = await fetch(`${nativeBase(env)}${path}`, {
         method: "POST",
         headers: { "content-type": "application/json", "x-goog-api-key": env.GEMINI_API_KEY },
         body: JSON.stringify(body),

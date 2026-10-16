@@ -288,10 +288,15 @@ describe("ai provider config resolution", () => {
     expect(err.message).toMatch(/AI_MODEL/);
   });
 
-  it("requires AI_GATEWAY_BASE for the native chat path", () => {
-    const err = configError(() => chatConfig({ GEMINI_API_KEY: "g" } as unknown as Env));
-    expect(err.code).toBe("config");
-    expect(err.message).toMatch(/AI_GATEWAY_BASE/);
+  it("falls back to the direct Google endpoint when AI_GATEWAY_BASE is unset", () => {
+    const cfg = chatConfig({ GEMINI_API_KEY: "g" } as unknown as Env);
+    expect(cfg).toEqual({
+      mode: "native",
+      base: "https://generativelanguage.googleapis.com",
+      key: "g",
+      model: EXTRACTION_MODEL,
+      fallback: EXTRACTION_FALLBACK_MODEL,
+    });
   });
 
   it("resolves native embeddings by default", () => {
@@ -305,6 +310,12 @@ describe("ai provider config resolution", () => {
       dimsExplicit: false,
       signature: "gemini-embedding-001@768",
     });
+  });
+
+  it("falls back to the direct Google endpoint for native embeddings too", () => {
+    const cfg = embedConfig({ GEMINI_API_KEY: "g" } as unknown as Env);
+    expect(cfg.mode).toBe("native");
+    expect(cfg.base).toBe("https://generativelanguage.googleapis.com");
   });
 
   it("inherits the compat chat base for embeddings and requires AI_EMBED_MODEL", () => {

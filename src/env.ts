@@ -12,7 +12,7 @@ export interface Env {
   MCP_READ_TOKEN: string;
   MCP_PROPOSE_TOKEN: string;
   ADMIN_TOKEN: string;
-  AI_GATEWAY_BASE: string;
+  AI_GATEWAY_BASE?: string;
   GEMINI_API_KEY: string;
   /** Optional: raises GitHub API rate limits for the connector; unauthenticated works for public repos. */
   GITHUB_TOKEN?: string;
