@@ -160,15 +160,37 @@ Observability telemetry API is optional and needs a token with `Workers
 Observability Write` (it 403s without one) — nothing in setup requires it;
 `wrangler tail` + the health report cover normal ops.
 
-## 6. CI — Workers Builds (recommended)
+## 6. CI — Workers Builds (dashboard)
 
-1. Cloudflare dashboard → Workers & Pages → `brain-api` → Settings → Builds →
-   connect GitHub repo, production branch `master`.
-2. Build command: `npm ci && npm test` (a red suite blocks the deploy).
-3. Deploy command: `npx wrangler deploy --env=""` (same rule as §4).
-4. **Do not configure preview builds** — previews would run against the same
-   prod D1/R2 (there is no preview isolation yet); confirm none are listed after
-   connecting.
+Connect the repo so every push to `master` builds, tests, and deploys the
+worker automatically. Two dashboard paths, same result — use whichever you
+reach first. (Requires the repo under your own GitHub account — fork or push
+the clone there.)
+
+**A. Fresh import** — dashboard → *Workers & Pages* → *Create* →
+**Continue with GitHub** (authorize the *Cloudflare Workers and Pages* GitHub
+App for the repo) → **Select a repository** → **Set up your application** with
+exactly these values:
+
+| Field | Value |
+| --- | --- |
+| Project name | **must equal the worker `name` in `wrangler.jsonc`** — `brain-api` for a stock checkout. The dashboard pre-fills the repo name (`brain`); change it to match before clicking Deploy. |
+| Build command | `npm ci && npm test` — shown as optional, but this is the gate: a red suite blocks the deploy. |
+| Deploy command | replace the default `npx wrangler deploy` with `npx wrangler deploy --env=""` (same rule as §4 — an env flag would deploy a worker with zero bindings). |
+| Preview command | leave the default (`npx wrangler preview`) — unused below. |
+| Enable Preview builds | **turn OFF** — previews would run against the same prod D1/R2; there is no preview isolation yet. |
+| Protect with Cloudflare Access | leave OFF — the worker authenticates with its own tokens. |
+
+Click **Deploy**. Complete §2–§4 first: `secrets.required` makes the deploy
+step fail loudly if the six secrets are not on the worker yet — set them, then
+re-run the build. Every later push to `master` runs the same pipeline.
+
+**B. Existing worker** — dashboard → *Workers & Pages* → `brain-api` →
+*Settings* → *Builds* → connect the GitHub repo, production branch `master`,
+same build/deploy commands as above. Do not configure preview builds.
+
+Whichever path you used, confirm afterwards that **no preview builds are
+listed** in the project settings.
 
 If push-triggered builds go silent, first check the *Cloudflare Workers and
 Pages* GitHub App still has repo access (docs/engineering.md §"Deploy & CI" has the exact

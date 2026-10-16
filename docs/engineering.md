@@ -275,10 +275,10 @@ live.
   bindings, so `--env prod` would deploy a worker with zero D1/R2 bindings.
 - **Secrets survive deploys** (worker-level, never touched by a deploy):
   `PAYLOAD_KEK`, `CONTENT_HMAC_KEY`, `MCP_READ_TOKEN`, `MCP_PROPOSE_TOKEN`,
-  `ADMIN_TOKEN`. `keep_vars: true` additionally protects dashboard-set plain-text
-  vars, and `secrets.required` in `wrangler.jsonc` makes a deploy *fail loudly*
-  if any of the 5 secrets is missing. Symptom of a missing secret: every
-  authenticated route 401s.
+  `ADMIN_TOKEN`, `GEMINI_API_KEY`. `keep_vars: true` additionally protects
+  dashboard-set plain-text vars, and `secrets.required` in `wrangler.jsonc`
+  makes a deploy *fail loudly* if any of the six required secrets is missing.
+  Symptom of a missing secret: every authenticated route 401s.
 - **Preview builds are intentionally NOT configured** — previews would run
   against the same prod D1/R2; there is no preview isolation yet.
 - **Push-triggered builds go silent if the GitHub App loses repo access.** The

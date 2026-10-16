@@ -8,6 +8,12 @@ Pre-1.0: minor versions may change behavior; patch versions are fixes only.
 
 ## [Unreleased]
 
+### Added
+
+- The setup guide now walks the Workers Builds dashboard import flow —
+  project name, build / deploy / preview field values, preview builds off —
+  in [`docs/setup.md`](docs/setup.md) §6.
+
 ### Changed
 
 - README is now user-facing (what it is / why it's different / quickstart);
