@@ -19,6 +19,9 @@ Pre-1.0: minor versions may change behavior; patch versions are fixes only.
 - README is now user-facing (what it is / why it's different / quickstart);
   the engineer and operator notes moved to
   [`docs/engineering.md`](docs/engineering.md).
+- README rebuilt in a NodeWarden-style product layout: centered logo banner
+  ([`brain.svg`](brain.svg)), feature-comparison table, visual (dashboard)
+  quick deploy, FAQ, credits.
 
 ## [0.1.0] — 2026-10-16
 

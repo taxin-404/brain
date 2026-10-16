@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="232" height="72" viewBox="0 0 232 72" role="img" aria-label="brain">
+  <rect x="4" y="8" width="56" height="56" rx="16" fill="#E8590C"/>
+  <g stroke="#FFFFFF" stroke-width="3" stroke-linecap="round">
+    <line x1="22" y1="28" x2="44" y2="24"/>
+    <line x1="22" y1="28" x2="30" y2="48"/>
+    <line x1="44" y1="24" x2="30" y2="48"/>
+  </g>
+  <circle cx="22" cy="28" r="4.5" fill="#FFFFFF"/>
+  <circle cx="44" cy="24" r="4.5" fill="#FFFFFF"/>
+  <circle cx="30" cy="48" r="4.5" fill="#FFFFFF"/>
+  <text x="76" y="51" font-family="ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="40" font-weight="700" letter-spacing="-1" fill="#E8590C">brain</text>
+</svg>

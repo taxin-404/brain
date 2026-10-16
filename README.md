@@ -1,198 +1,160 @@
-# brain
+<p align="center">
+  <img src="./brain.svg" alt="brain" />
+</p>
 
-[![CI](https://github.com/taxin-404/brain/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/taxin-404/brain/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+<p align="center">
+  Personal memory for OpenCode sessions, running on Cloudflare Workers
+</p>
 
-**Personal memory for OpenCode sessions.** brain captures every session
-automatically, distills it into durable facts, and recalls the right ones in
-future sessions — privately, on your own Cloudflare account, inside the free
-tier.
+<p align="center">
+  <a href="https://workers.cloudflare.com/"><img src="https://img.shields.io/badge/Powered%20by-Cloudflare-F38020?logo=cloudflare&logoColor=white" alt="Powered by Cloudflare" /></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/License-MIT-2ea44f" alt="License: MIT" /></a>
+  <a href="https://github.com/taxin-404/brain/releases/latest"><img src="https://img.shields.io/github/v/release/taxin-404/brain?display_name=tag" alt="Latest release" /></a>
+  <a href="https://github.com/taxin-404/brain/actions/workflows/ci.yml"><img src="https://github.com/taxin-404/brain/actions/workflows/ci.yml/badge.svg?branch=master" alt="CI" /></a>
+</p>
 
-## What it is
+<p align="center">
+  <a href="./docs/setup.md">Setup guide</a> |
+  <a href="./docs/engineering.md">Engineering notes</a> |
+  <a href="./CONTRIBUTING.md">Contributing</a> |
+  <a href="./SECURITY.md">Security</a>
+</p>
 
-- A **capture plugin** for [OpenCode](https://opencode.ai) — every session is
-  ingested automatically. No "remember this" commands, no manual notes.
-- A **memory worker** on Cloudflare Workers — events are redacted, encrypted,
-  and stored in D1/R2; a background sweep extracts durable facts (people,
-  preferences, projects, decisions…) and embeds them for search.
-- **Recall for your assistant** — keyword + semantic search and an MCP server,
-  so any future session can ask "what do I know about X?".
-- A **review queue** — the assistant can *propose* changes to memory; only you
-  apply them. Everything is audited, and reversible changes can be undone.
-- **Self-maintenance** — nightly consolidation merges duplicates, temporary
-  facts expire, and weekly/monthly reflections summarise recent memory.
+> **Note**
+> brain stores sensitive personal memory — run your own deployment, and never point your assistant at someone else's worker.
+> Free-tier AI providers may use non-`restricted` content to improve their products; see [SECURITY.md](./SECURITY.md).
 
-Shipped as [v0.1.0](CHANGELOG.md) and verified end to end on a live
-deployment.
+Your OpenCode session flows through a capture plugin (redacts + encrypts),
+a 30-minute sweep distills durable facts through AI Gateway, and future
+sessions recall them via MCP — while the assistant can only *propose* memory
+changes that **you** review.
 
-## Why it's different
+---
 
-Most AI memory is either a hosted service that keeps your data, or a vector
-store that only grows and never forgets.
+## Feature comparison with typical AI memory
 
-- **Yours, end to end.** Runs in your own Cloudflare account — no third-party
-  memory service ever sees your sessions.
-- **Privacy by construction.** Secrets are redacted *before* storage; payloads
-  are encrypted per event (AES-GCM with wrapped keys); anything marked
-  `restricted` never reaches a model — and a leaked backup is useless without
-  your key.
-- **You stay in charge.** The assistant can only *propose* corrections, forgets,
-  and procedures — applying and approving is human-only, every change is
-  audited, and reversible ones can be undone.
-- **Built to forget.** Hard deletes gated by single-use tokens, expiry for
-  temporary facts, and a nightly consolidation pass — with offline evals that
-  prove deleted data stays deleted.
-- **Evidence over vibes.** Every fact carries provenance back to the source
-  event, a `why` view shows the full version chain, and contradictions are
-  handled deterministically — no silent rewrites.
-- **Zero-effort capture.** Deep OpenCode integration (plugin + MCP), not a
-  generic API you have to feed by hand.
-- **Free-tier friendly.** Designed and live-run on Cloudflare's free tier, with
-  an in-app budget breaker to keep it there.
+| Feature | Typical AI memory | brain | Notes |
+| --- | --- | --- | --- |
+| Where your data lives | ❌ Vendor cloud | ✅ **Your Cloudflare account** | D1 + R2 + Vectorize, in your account |
+| Session capture | ❌ Manual "remember this" | ✅ **Automatic** | OpenCode plugin captures every session |
+| Memory model | ❌ Raw text chunks | ✅ **Distilled facts** | Entities, dedupe, provenance — not a chunk pile |
+| Secret redaction | ❌ | ✅ **Before storage** | Stripped on ingest, before any model sees it |
+| Encryption at rest | ⚠️ Vendor-managed | ✅ **Your keys** | Per-event AES-GCM; the KEK stays yours |
+| Hard delete | ⚠️ Varies | ✅ **Crypto-shred** | Single-use confirm tokens; payload key destroyed |
+| Assistant writes | ❌ Direct edits | ✅ **Propose-only** | You apply / discard / undo; every change audited |
+| Contradictions | ⚠️ Silent overwrite | ✅ **Deterministic** | Supersede or dispute — never silent |
+| Provenance | ⚠️ Partial | ✅ **`why` view** | Fact → full version chain → source events |
+| Duplicate facts | ❌ Append-only growth | ✅ **Nightly consolidation** | Merges only with independent evidence |
+| Reflections | ❌ | ✅ **Weekly + monthly** | Evidence-backed summaries you can review |
+| AI processing | ❌ Their model, their key | ✅ **Your gateway, your key** | Only non-`restricted` excerpts |
+| Cost | ❌ Subscription | ✅ **Cloudflare free tier** | + capped Gemini free tier; budget breaker included |
+| License | ❌ Proprietary | ✅ **MIT** | Fork, extend, self-host |
 
-## How it works
+---
 
-```text
- OpenCode session
-       │   plugin: capture + redact
-       ▼
- encrypted event store        D1 (metadata, FTS, facts) + R2 (payloads)
-       │   */30 sweep: extract facts via AI Gateway (free-tier model)
-       ▼
- facts + entities + embeddings          Vectorize (768-dim)
-       │   blended keyword + semantic search
-       ▼
- recall in future sessions · review queue · consolidation & reflections
-```
+## Tested with
 
-1. **Capture** — the plugin ships session events to `POST /v1/events/batch`
-   (secrets redacted on the way in, payloads encrypted per event).
-2. **Distill** — every 30 minutes the sweep sends unprocessed excerpts to a
-   free-tier Gemini model through Cloudflare's AI Gateway and lands facts with
-   entities, embeddings, and provenance.
-3. **Recall** — `GET /v1/search` blends FTS5 keyword and Vectorize semantic
-   results (RRF); MCP tools (`recall`, `get_blocks`, …) expose it to the
-   assistant in any session.
-4. **Review** — proposals land in a queue; you apply, discard, or undo via
-   REST (or the bundled read-only inspector page).
-5. **Maintain** — crons consolidate duplicates nightly, expire temporary
-   facts, write weekly/monthly reflections, and prune expired artifacts.
+- ✅ OpenCode — capture plugin + MCP recall/propose, live-verified end to end
+- ✅ HTTP clients — Bearer/JSON routes verified with single-shot `curl` against the live worker
+- ✅ Browser — bundled read-only inspector page
+- ⚠️ Other agent platforms not verified yet — the HTTP API is plain Bearer/JSON
 
-Deep dives: [`docs/design-v1.2.md`](docs/design-v1.2.md) (behavior authority) ·
-[`docs/engineering.md`](docs/engineering.md) (phases, ops, CI, free-tier rules).
+---
 
-## Self-host quickstart
+## Visual quick deploy
 
-**Prerequisites:** Node 20+, a bash shell with `openssl`, a free Cloudflare
-account, a free [Google AI Studio](https://aistudio.google.com) API key, and
-[OpenCode](https://opencode.ai) for the client side.
+1. Create the pieces in the [Cloudflare dashboard](https://dash.cloudflare.com/): a **D1** database `brain-db` (copy its ID), an **R2** bucket `brain-raw`, a **Vectorize** index `brain-memory` (768 dims, cosine) with string metadata indexes `type`, `status`, `sensitivity`, and an **AI Gateway** named `brain`. Grab a free [Google AI Studio](https://aistudio.google.com) API key.
+
+2. **Fork** this repository, then edit `wrangler.jsonc` right in GitHub: paste your D1 database ID and set `vars.AI_GATEWAY_BASE` to `https://gateway.ai.cloudflare.com/v1/<account_id>/brain/google-ai-studio` (account ID is in the dashboard sidebar).
+
+3. Apply the schema once from a terminal:
+   `npx wrangler login` then `npx wrangler d1 migrations apply brain-db --remote`
+
+4. In **Workers & Pages → Create → Continue with GitHub**, select your fork and set: name `brain-api`, build command `npm ci && npm test`, deploy command `npx wrangler deploy --env=""`, and **turn OFF preview builds**. Click **Deploy**.
+
+5. The first deploy stops with *Missing required secrets* — on purpose. Add the six secrets (`PAYLOAD_KEK`, `CONTENT_HMAC_KEY`, `MCP_READ_TOKEN`, `MCP_PROPOSE_TOKEN`, `ADMIN_TOKEN`, `GEMINI_API_KEY`) under the Worker → **Settings → Variables and Secrets**, then hit **Retry deployment**.
+
+6. `GET <worker-url>/v1/health-report` with your `ADMIN_TOKEN` — a fresh install answers with zeros. Then wire up OpenCode (see [docs/setup.md](./docs/setup.md) §7).
+
+- The default `*.workers.dev` hostname works as-is; add a custom domain under Worker → **Settings → Domains & Routes**.
+- Prefer the terminal end to end? → [CLI deploy](#cli-deploy) below.
+
+> [!TIP]
+> brain is designed for the Cloudflare **free plan** — an in-app budget breaker
+> pauses expensive writes at ~80k row-writes/day. Never run load tests against
+> a deployed worker; verify with single-shot requests.
+
+---
+
+## FAQ
+
+- **Why did my first deploy fail with "Missing required secrets"?**
+  On purpose: `secrets.required` keeps a half-configured worker from serving traffic. Add the six secrets (step 5), then **Retry deployment**.
+
+- **My assistant recalls nothing — is capture broken?**
+  Facts appear after the next 30-minute sweep, and only sessions run *after* wiring the plugin are captured. Check capture health in `/tmp/opencode/brain-capture-diag.log` (`ingest_ok`); the [setup guide](./docs/setup.md) has a full verification checklist.
+
+- **Every route answers 401 — what now?**
+  Almost always a token mismatch: `MCP_READ_TOKEN`, `MCP_PROPOSE_TOKEN` and `ADMIN_TOKEN` must match what your clients send. Re-copy them under Worker → Settings → Variables and Secrets.
+
+- **Is my content sent to an AI provider?**
+  Yes — non-`restricted` excerpts go to Gemini through *your* AI Gateway and *your* key, for fact extraction and embeddings. Content marked `restricted`, and anything the redactor strips, never leaves the system. Details in [SECURITY.md](./SECURITY.md).
+
+- **Where did a fact go?**
+  Nothing is deleted without a single-use confirm token. Facts can be `superseded` (corrections keep the old version, visible via the `why` view) or `archived` when temporary facts expire by design.
+
+---
+
+## How to update
+
+- **Fork:** when GitHub shows the sync banner, click **Sync fork** → **Update branch** — Workers Builds redeploys automatically.
+- **Clone:** `git pull` (Workers Builds deploys on push, or run `npm run deploy`).
+
+---
+
+## CLI deploy
 
 ```bash
-git clone https://github.com/taxin-404/brain.git && cd brain
+git clone https://github.com/taxin-404/brain.git
+cd brain
 npm ci
 npx wrangler login
-```
 
-**1. Provision resources**
-
-```bash
-npx wrangler d1 create brain-db        # paste the printed database_id into wrangler.jsonc
+# 1. resources — paste database_id into wrangler.jsonc, create the AI Gateway "brain" in the dashboard
+npx wrangler d1 create brain-db
 npx wrangler r2 bucket create brain-raw
 npx wrangler vectorize create brain-memory --dimensions=768 --metric=cosine
 for p in type status sensitivity; do
   npx wrangler vectorize create-metadata-index brain-memory --property-name="$p" --type=string
 done
-npx wrangler vectorize list-metadata-index brain-memory   # re-run until all three appear (async)
+
+# 2. schema
+npx wrangler d1 migrations apply brain-db --remote
+
+# 3. secrets — generate, escrow, upload (exact snippet in docs/setup.md §3)
+
+# 4. deploy
+npm run deploy
 ```
 
-Create an AI Gateway named `brain` (dashboard → AI → AI Gateway), then edit
-`wrangler.jsonc`:
+Full walkthrough with every gotcha: [docs/setup.md](./docs/setup.md).
 
-- `d1_databases[0].database_id` → the id printed by `d1 create`
-- `vars.AI_GATEWAY_BASE` → `https://gateway.ai.cloudflare.com/v1/<account_id>/brain/google-ai-studio`
-  (`<account_id>`: dashboard sidebar, or `npx wrangler whoami`)
-
-**2. Apply the schema**
-
-```bash
-npx wrangler d1 migrations apply brain-db --remote     # expect 0001–0006
-```
-
-**3. Generate secrets, escrow them, set them**
-
-```bash
-umask 077; mkdir -p .secrets
-echo "PAYLOAD_KEK=$(openssl rand -base64 32)"   >> .secrets/prod.env
-echo "CONTENT_HMAC_KEY=$(openssl rand -hex 32)" >> .secrets/prod.env
-for s in MCP_READ_TOKEN MCP_PROPOSE_TOKEN ADMIN_TOKEN; do
-  echo "$s=$(openssl rand -hex 32)" >> .secrets/prod.env
-done
-echo "GEMINI_API_KEY=" >> .secrets/prod.env     # now edit the file: paste your AI Studio key after the =
-```
-
-**Escrow `.secrets/prod.env` in your password manager before going further** —
-lose `PAYLOAD_KEK` and encrypted payloads are unrecoverable forever. Then:
-
-```bash
-set -a; source .secrets/prod.env; set +a
-for s in PAYLOAD_KEK CONTENT_HMAC_KEY MCP_READ_TOKEN MCP_PROPOSE_TOKEN ADMIN_TOKEN GEMINI_API_KEY; do
-  printf '%s' "${!s}" | npx wrangler secret put "$s" --env=""
-done
-```
-
-**4. Deploy and verify**
-
-```bash
-npm run deploy     # = wrangler deploy --env=""   (never use --env prod)
-curl -s https://brain-api.<your-subdomain>.workers.dev/v1/health-report \
-  -H "Authorization: Bearer $ADMIN_TOKEN"   # a fresh install answers with zeros
-```
-
-> **Free tier:** never run request loops or load tests against your deployed
-> worker — verify with single-shot requests only. More rules:
-> [`docs/engineering.md`](docs/engineering.md) § "Free-tier rules".
-
-**5. Wire up OpenCode** — one-time plugin install, then add to
-`~/.config/opencode/opencode.json` (paths, host, and tokens yours):
-
-```bash
-cd plugin && npm ci
-```
-
-```jsonc
-{
-  "plugins": [
-    { "package": "/abs/path/to/brain/plugin",
-      "options": { "endpoint": "https://brain-api.<your-subdomain>.workers.dev", "token": "<MCP_PROPOSE_TOKEN>" } }
-  ],
-  "mcp": {
-    "brain":         { "type": "remote", "url": "https://brain-api.<your-subdomain>.workers.dev/mcp", "headers": { "Authorization": "Bearer <MCP_READ_TOKEN>" }, "enabled": true },
-    "brain-propose": { "type": "remote", "url": "https://brain-api.<your-subdomain>.workers.dev/mcp", "headers": { "Authorization": "Bearer <MCP_PROPOSE_TOKEN>" }, "enabled": true }
-  }
-}
-```
-
-Two MCP entries on purpose: each connection carries exactly one token — `brain`
-(read scope, always-safe recall) and `brain-propose` (write scope for
-`remember` / `propose_*`, and the plugin's capture ingest). Use OpenCode for a
-minute; capture is live when `/tmp/opencode/brain-capture-diag.log` shows
-`ingest_ok`. Within ~30 minutes the first facts are extracted and recallable.
-
-> The full walkthrough — escrow details, CI setup, every gotcha, and a
-> troubleshooting table — is in [`docs/setup.md`](docs/setup.md).
+---
 
 ## Documentation
 
-| Doc | What it covers |
-| --- | --- |
-| [`docs/setup.md`](docs/setup.md) | Full setup: secrets flow, verification, troubleshooting |
-| [`docs/engineering.md`](docs/engineering.md) | How each phase works, ops facts, deploy & CI, free-tier rules, agent notes |
-| [`docs/design-v1.2.md`](docs/design-v1.2.md) | Design spec — authority for behavior, SQL, budgets |
-| [`docs/maintenance.md`](docs/maintenance.md) | Releases, CI map, keeping in sync with related projects |
-| [`CONTRIBUTING.md`](CONTRIBUTING.md) | Dev loop, gates, repo anatomy, PR flow |
-| [`SECURITY.md`](SECURITY.md) | Private vulnerability reporting |
-| [`CHANGELOG.md`](CHANGELOG.md) | Release history |
+[Setup](./docs/setup.md) · [Engineering notes](./docs/engineering.md) ·
+[Design](./docs/design-v1.2.md) · [Maintenance](./docs/maintenance.md) ·
+[Changelog](./CHANGELOG.md)
 
 ## License
 
-[MIT](LICENSE) © 2026 taxin-404 — self-host, fork, modify freely; just keep the copyright notice.
+MIT — see [LICENSE](./LICENSE).
+
+## Credits
+
+- [Cloudflare Workers](https://workers.cloudflare.com/) — platform (Workers · D1 · R2 · Vectorize · AI Gateway)
+- [Google Gemini](https://ai.google.dev/) — fact extraction + embeddings, free tier
+- [OpenCode](https://opencode.ai) — the agent this captures
+- [mem0](https://github.com/mem0ai/mem0) — its `mem0-server` OpenCode plugin was the same-role reference for ours (ideas ported by hand, no code copied)
+- [NodeWarden](https://github.com/shuaiplus/NodeWarden) — README layout inspiration
