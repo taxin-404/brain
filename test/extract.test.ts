@@ -1,9 +1,10 @@
 import { env } from "cloudflare:workers";
 import { http, HttpResponse } from "msw";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { newEventId } from "../src/crypto";
 import { resolveSubject } from "../src/entities";
 import { EXTRACTION_CAPS, processExtractions } from "../src/extract";
+import { installFakeVectorize } from "./helpers";
 import { network } from "./server";
 
 const GEN_URL = "https://gw.test/google-ai-studio/v1beta/models/gemini-3.5-flash-lite:generateContent";
@@ -140,7 +141,7 @@ describe("processExtractions", () => {
       confidence: 0.9,
       sensitivity: "normal",
       learned_at: now,
-      embedding_model: "gemini-embedding-001",
+      embedding_model: "gemini-embedding-001@768",
       vec_id: null,
       subject_type: "Person",
       norm_name: "user",
@@ -226,6 +227,36 @@ describe("processExtractions", () => {
       .bind(created?.id)
       .first<{ c: number }>();
     expect(sources?.c).toBe(2);
+  });
+
+  it("keeps the run green when the embed stage fails its config guard", async () => {
+    installFakeVectorize({ dims: 512 }); // index is not the 768 dims the default expects
+    const a = await seedEvent({ excerpt: "guardrail marker" });
+    handleGen((lines) =>
+      JSON.stringify(
+        lines.map((l) => ({
+          subject: "user",
+          subject_type: "Person",
+          predicate: "mentions",
+          object: "guardrail",
+          fact_kind: "user_stated",
+          confidence: 0.9,
+          event_id: l.event_id,
+        })),
+      ),
+    );
+    const log = vi.spyOn(console, "log");
+
+    const run = await processExtractions(env, { now: 1_900_000_000_000 });
+    expect(run).toMatchObject({ facts: 1, embedded: 0, embedFailed: 0 });
+    expect(log.mock.calls.some(([line]) => String(line).startsWith("[embed] skipped:"))).toBe(true);
+    log.mockRestore();
+
+    // the fact itself was still stored; it just has no vector yet
+    const row = await env.BRAIN_DB.prepare(`SELECT vec_id FROM facts WHERE source_event_id = ?1`)
+      .bind(a)
+      .first<{ vec_id: string | null }>();
+    expect(row?.vec_id).toBeNull();
   });
 
   it("never queues or sends restricted events", async () => {

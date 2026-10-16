@@ -65,8 +65,9 @@ const cosine = (a: number[], b: number[]) => {
 
 /** In-memory Vectorize stand-in installed through the env proxy (the T1 seam —
  *  miniflare has no local Vectorize simulation). Query ranks by cosine over the
- *  stored vectors. Returns the backing store so tests can pre-seed vectors. */
-export function installFakeVectorize(): Map<string, StoredVector> {
+ *  stored vectors; `describe` reports 768 dims unless `opts.dims` overrides it
+ *  (for index-guard tests). Returns the backing store so tests can pre-seed. */
+export function installFakeVectorize(opts: { dims?: number } = {}): Map<string, StoredVector> {
   const store = new Map<string, StoredVector>();
   const put = (vectors: Array<{ id: string; values: number[]; metadata?: Record<string, unknown> }>) => {
     for (const v of vectors) store.set(v.id, { id: v.id, values: v.values, metadata: v.metadata ?? {} });
@@ -85,7 +86,12 @@ export function installFakeVectorize(): Map<string, StoredVector> {
       for (const id of ids) store.delete(id);
       return { mutationId: "test" };
     },
-    describe: async () => ({ name: "fake", config: {}, vectorsCount: store.size }),
+    describe: async () => ({
+      id: "fake",
+      name: "fake",
+      config: { dimensions: opts.dims ?? 768, metric: "cosine" },
+      vectorsCount: store.size,
+    }),
   };
   (env as unknown as Record<string, unknown>).VECTORIZE = index as unknown as VectorizeIndex;
   return store;

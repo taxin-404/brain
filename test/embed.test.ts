@@ -2,7 +2,8 @@ import { env } from "cloudflare:workers";
 import { http, HttpResponse } from "msw";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { embedPendingFacts } from "../src/embed";
-import { fakeVec, installFakeVectorize, seedFact } from "./helpers";
+import { LlmError } from "../src/llm";
+import { fakeVec, installFakeVectorize, seedFact, setEnvVars } from "./helpers";
 import { network } from "./server";
 
 const EMB_URL = "https://gw.test/google-ai-studio/v1beta/models/gemini-embedding-001:batchEmbedContents";
@@ -24,6 +25,13 @@ describe("embedPendingFacts", () => {
   });
   afterEach(() => {
     network.resetHandlers();
+    setEnvVars({
+      AI_BASE_URL: undefined,
+      AI_EMBED_BASE_URL: undefined,
+      AI_EMBED_API_KEY: undefined,
+      AI_EMBED_MODEL: undefined,
+      AI_EMBED_DIMS: undefined,
+    });
   });
   afterAll(async () => {
     await network.disable();
@@ -53,7 +61,7 @@ describe("embedPendingFacts", () => {
       type: "fact",
       status: "active",
       sensitivity: "normal",
-      embedding_model: "gemini-embedding-001",
+      embedding_model: "gemini-embedding-001@768",
       updated_at: expect.any(Number),
     });
 
@@ -75,5 +83,73 @@ describe("embedPendingFacts", () => {
       .first<{ vec_id: string | null }>();
     expect(row?.vec_id).toBeNull();
     expect(store.size).toBe(0);
+  });
+
+  it("does not re-embed legacy rows whose bare model matches the current signature", async () => {
+    const store = installFakeVectorize();
+    handleEmbed();
+    await embedPendingFacts(env); // flush facts left pending by earlier tests
+    const factId = await seedFact({ name: "legacy", predicate: "text", object: "old alpha" });
+    const first = await embedPendingFacts(env);
+    expect(first).toEqual({ embedded: 1, failed: 0 });
+
+    // simulate a pre-signature row: bare model name, vector already present
+    await env.BRAIN_DB.prepare(`UPDATE facts SET embedding_model = 'gemini-embedding-001' WHERE id = ?1`)
+      .bind(factId)
+      .run();
+    let calls = 0;
+    network.use(
+      http.post(EMB_URL, () => {
+        calls += 1;
+        return HttpResponse.json({ embeddings: [] });
+      }),
+    );
+
+    const sizeBefore = store.size;
+    const second = await embedPendingFacts(env);
+    expect(second).toEqual({ embedded: 0, failed: 0 });
+    expect(calls).toBe(0);
+    expect(store.size).toBe(sizeBefore);
+  });
+
+  it("re-embeds rows when the embedding signature changes", async () => {
+    const store = installFakeVectorize();
+    handleEmbed();
+    await embedPendingFacts(env); // flush facts left pending by earlier tests
+    const factId = await seedFact({ name: "switcher", predicate: "text", object: "delta" });
+    const first = await embedPendingFacts(env);
+    expect(first).toEqual({ embedded: 1, failed: 0 });
+    expect(store.get(factId)?.metadata.embedding_model).toBe("gemini-embedding-001@768");
+
+    // pin every other vector to the target signature so only our fact is stale
+    await env.BRAIN_DB.prepare(`UPDATE facts SET embedding_model = 'other-embed@768' WHERE id != ?1 AND vec_id IS NOT NULL`)
+      .bind(factId)
+      .run();
+
+    // switch embeddings to a compatible provider with a different model
+    setEnvVars({ AI_BASE_URL: "https://oai.test/v1", AI_EMBED_MODEL: "other-embed" });
+    network.use(
+      http.post("https://oai.test/v1/embeddings", async ({ request }) => {
+        const body = (await request.json()) as { input?: string[] };
+        return HttpResponse.json({ data: (body.input ?? []).map((t) => ({ embedding: fakeVec(t) })) });
+      }),
+    );
+
+    const second = await embedPendingFacts(env);
+    expect(second).toEqual({ embedded: 1, failed: 0 });
+    const row = await env.BRAIN_DB.prepare(`SELECT embedding_model FROM facts WHERE id = ?1`)
+      .bind(factId)
+      .first<{ embedding_model: string | null }>();
+    expect(row?.embedding_model).toBe("other-embed@768");
+    expect(store.get(factId)?.metadata.embedding_model).toBe("other-embed@768");
+  });
+
+  it("fails loudly when the index dimensions and the expected dims disagree", async () => {
+    installFakeVectorize({ dims: 512 });
+    const err = (await embedPendingFacts(env).catch((e) => e)) as LlmError;
+    expect(err).toBeInstanceOf(LlmError);
+    expect(err.code).toBe("config");
+    expect(err.message).toMatch(/512/);
+    expect(err.message).toMatch(/AI_EMBED_DIMS/);
   });
 });

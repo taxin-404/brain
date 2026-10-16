@@ -3,7 +3,7 @@ import type { Env } from "./env";
 import { resolveObjectEntity } from "./entities";
 import { newFactId, type FactKind } from "./facts";
 import { closeFactEdges, linkFactEdges } from "./graph";
-import { EMBEDDING_MODEL } from "./llm";
+import { embeddingSignature } from "./llm";
 
 /** The single fact write path. Extraction, the review engine, and
  *  contradiction handling all funnel through here so a fact row, its FTS
@@ -53,7 +53,7 @@ export async function createFact(env: Env, input: CreateFactInput): Promise<stri
       now,
       input.sensitivity,
       input.sourceEventId,
-      EMBEDDING_MODEL,
+      embeddingSignature(env),
     )
     .run();
 

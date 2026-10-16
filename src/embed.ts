@@ -1,6 +1,6 @@
 import type { Env } from "./env";
 import { buildEmbedText } from "./facts";
-import { EMBEDDING_MODEL, embedTexts } from "./llm";
+import { embedConfig, embedTexts, LlmError } from "./llm";
 
 export interface EmbedRun {
   embedded: number;
@@ -19,20 +19,36 @@ interface UnembeddedFact {
   sensitivity: string;
 }
 
-/** Embed active, non-restricted facts that have no vector yet and upsert them
- *  into Vectorize (vector id = fact id). Failures are counted, never thrown:
- *  the fact keeps `vec_id` NULL and the next sweep retries it. */
+/** Embed active, non-restricted facts whose vector is missing or was built by
+ *  a different embedding model/size, and upsert them into Vectorize (vector
+ *  id = fact id). Failures are counted, never thrown: the old vector stays
+ *  and the next sweep retries. A config-level mismatch (index dims) throws —
+ *  every upsert below would fail silently in a loop otherwise. */
 export async function embedPendingFacts(env: Env, opts: { maxFacts?: number } = {}): Promise<EmbedRun> {
   const maxFacts = opts.maxFacts ?? DEFAULT_MAX;
   const run: EmbedRun = { embedded: 0, failed: 0 };
 
+  const cfg = embedConfig(env);
+  const info = await env.VECTORIZE.describe();
+  const indexDims = "dimensions" in info.config ? info.config.dimensions : null;
+  if (indexDims !== null && indexDims !== cfg.dims) {
+    throw new LlmError(
+      "config",
+      `vectorize index is ${indexDims}-dim but AI_EMBED_DIMS is ${cfg.dims} — recreate the index at ${cfg.dims} dims or fix AI_EMBED_DIMS`,
+    );
+  }
+
+  // Pre-signature rows carry the bare model name (the column is NOT NULL
+  // since its first migration); the ?1 bind counts them as current at the
+  // default dims, while a model switch re-embeds them via the ?2 signature.
   const { results } = await env.BRAIN_DB.prepare(
     `SELECT f.id, e.name AS subject_name, f.predicate, f.object_text, f.status, f.sensitivity
      FROM facts f JOIN entities e ON e.id = f.subject_id
-     WHERE f.vec_id IS NULL AND f.sensitivity != 'restricted' AND f.status = 'active'
-     ORDER BY f.learned_at ASC LIMIT ?1`,
+     WHERE (f.vec_id IS NULL OR (f.embedding_model IS NOT ?1 AND f.embedding_model IS NOT ?2))
+       AND f.sensitivity != 'restricted' AND f.status = 'active'
+     ORDER BY f.learned_at ASC LIMIT ?3`,
   )
-    .bind(maxFacts)
+    .bind(cfg.model, cfg.signature, maxFacts)
     .all<UnembeddedFact>();
 
   for (let i = 0; i < results.length; i += CHUNK) {
@@ -52,17 +68,19 @@ export async function embedPendingFacts(env: Env, opts: { maxFacts?: number } = 
             type: "fact",
             status: f.status,
             sensitivity: f.sensitivity,
-            embedding_model: EMBEDDING_MODEL,
+            embedding_model: cfg.signature,
             updated_at: now,
           },
         })),
       );
       for (const f of chunk) {
-        await env.BRAIN_DB.prepare(`UPDATE facts SET vec_id = ?1 WHERE id = ?2`).bind(f.id, f.id).run();
+        await env.BRAIN_DB.prepare(`UPDATE facts SET vec_id = ?1, embedding_model = ?2 WHERE id = ?1`)
+          .bind(f.id, cfg.signature)
+          .run();
       }
       run.embedded += chunk.length;
     } catch {
-      // gateway or Vectorize failure: vec_id stays NULL, retry on a later sweep
+      // provider or Vectorize failure: the old vector stays, retry next sweep
       run.failed += chunk.length;
     }
   }

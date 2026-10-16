@@ -50,7 +50,7 @@ describe("factstore", () => {
       confidence: 0.59,
       status: "active",
       vec_id: null,
-      embedding_model: "gemini-embedding-001",
+      embedding_model: "gemini-embedding-001@768",
     });
 
     // FTS5 is external-content: MATCH hits prove the manual index row exists.

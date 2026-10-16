@@ -239,10 +239,16 @@ export async function processExtractions(
     }
   }
 
-  // 6. embed newly created facts (best-effort; failures retry next sweep)
-  const embs = await embedPendingFacts(env);
-  run.embedded = embs.embedded;
-  run.embedFailed = embs.failed;
+  // 6. embed newly created facts (best-effort; failures retry next sweep; a
+  //    config-level failure — e.g. an index dims mismatch — is logged, never
+  //    thrown: extraction stays green and the sweep/fix path owns the repair)
+  try {
+    const embs = await embedPendingFacts(env);
+    run.embedded = embs.embedded;
+    run.embedFailed = embs.failed;
+  } catch (err) {
+    console.log(`[embed] skipped: ${err instanceof Error ? err.message : String(err)}`);
+  }
 
   return run;
 }
