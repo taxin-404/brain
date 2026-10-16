@@ -37,7 +37,7 @@ npx vitest run         # optional warm-up: the suite is fully offline (real work
 - A Google AI Studio API key ([aistudio.google.com](https://aistudio.google.com) → API keys; free tier works)
 - Client side (optional): [opencode](https://opencode.ai) with this repo checked out at a stable path
 
-Read `README.md` §"Free-tier rules" before touching a deployed worker — **never
+Read `docs/engineering.md` §"Free-tier rules" before touching a deployed worker — **never
 run request loops against it**; all tests run locally. Everything below assumes
 you are in the repo root.
 
@@ -171,7 +171,7 @@ Observability Write` (it 403s without one) — nothing in setup requires it;
    connecting.
 
 If push-triggered builds go silent, first check the *Cloudflare Workers and
-Pages* GitHub App still has repo access (README §"Deploy & CI" has the exact
+Pages* GitHub App still has repo access (docs/engineering.md §"Deploy & CI" has the exact
 link, plus the builds API and a manual-trigger curl for agents).
 
 ## 7. Client — capture + MCP (opencode)
@@ -277,13 +277,13 @@ curl -s -X POST https://<worker>/v1/proposals/<id>/apply \
 | --- | --- | --- |
 | Every authenticated route 401s | a secret is missing/different on the worker | `npx wrangler secret list`; re-put; deploys should have failed via `secrets.required` |
 | Worker runs but D1/R2 calls fail, bindings undefined | deployed with `--env prod` | redeploy with `npm run deploy` |
-| Push builds stop triggering | GitHub App lost repo access | re-connect the Workers and Pages app (README §"Deploy & CI") |
+| Push builds stop triggering | GitHub App lost repo access | re-connect the Workers and Pages app (docs/engineering.md §"Deploy & CI") |
 | `403` with "blocked access based on your browser's signature" | scripted User-Agent (e.g. python-urllib) hits the edge bot filter | probe with `curl` or a normal UA |
 | `wrangler r2 object list` prints help | subcommand doesn't exist in wrangler 4.x | verify prefix state with `r2 object get` absence probes |
 | Gemini 429s in logs | free-tier rate limits | absorbed by retry + fallback; check health `failed`; requeue with the §9 curl |
 | Dashboard shows error counts | historical windows (build-out era, fixed overnight) | compare a fresh window; counts roll off as the window ages out |
 | Export link 403s | signed TTL expired (15 min, renewed per slice while driven) | start a new export job |
 
-Development loop, tests, and agent rules are in `README.md` §"Develop" /
-§"For AI agents"; the capture-plugin gotcha (sessions come from the global event
+Development loop, tests, and agent rules are in `CONTRIBUTING.md` and
+`docs/engineering.md` §"For AI agents"; the capture-plugin gotcha (sessions come from the global event
 stream, `ctx.session` has no `list`) is in the Phase 1 ledger.

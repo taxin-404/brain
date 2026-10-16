@@ -84,3 +84,14 @@ record.
 - 2026-10-16 ~07:20Z: Workers Builds `9f52fe5b-9e8d-495c-808c-72b6bf88dbd6`
   — build + deploy success, `"success":true`, freshness-checked.
 - 2026-10-16 ~07:30Z: `v0.1.0` tagged and released (first public release).
+- 2026-10-16: owner feedback — README still developer-facing; a normal user
+  wants the easiest setup plus what/why/how it's different. Action taken (same
+  additive ruling — no functional code touched):
+  - New user-first README: what it is, why it's different, how it works
+    (pipeline + 5 stages), self-host quickstart condensed from the tested
+    `docs/setup.md`, slim docs table.
+  - Phases, progress table, ops facts, Deploy & CI, free-tier rules, agent
+    notes, and the full read-first map moved to `docs/engineering.md`.
+  - Cross-references updated (setup.md, maintenance.md, CONTRIBUTING,
+    SECURITY); CHANGELOG `[Unreleased]` notes the change.
+  - Push + CI verification recorded below once watched.

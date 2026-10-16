@@ -9,9 +9,9 @@ the maintainer, so **all development and testing happens locally**.
 
 1. **Never run load against deployed workers.** No loops, no parallel
    hammering — the account is on Cloudflare's free tier and quotas are shared
-   with the owner's other projects. The "Free-tier rules" section of the
-   [README](README.md) is required reading before you touch anything that
-   talks to a live URL.
+   with the owner's other projects. The "Free-tier rules" section of
+   [`docs/engineering.md`](docs/engineering.md) is required reading before you
+   touch anything that talks to a live URL.
 2. **Never commit secrets or captured personal data.** `.secrets/` and
    `.dev.vars` are gitignored; keep it that way. Fixtures use the public
    `dev-*` token names from `vitest.config.ts` — never real values.

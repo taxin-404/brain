@@ -37,8 +37,8 @@ commit, not a deploy trigger.
 | Cloudflare Workers Builds | push to `master` | `npm ci && npm test`, then `npx wrangler deploy --env=""` **only if green** — this is the production deploy. |
 | Dependabot | weekly | dependency-update PRs (root npm, plugin npm, GitHub Actions). |
 
-Before touching build settings, read the Workers Builds notes in the README —
-`--env=""` and the shared account token are load-bearing.
+Before touching build settings, read the Workers Builds notes in
+`docs/engineering.md` — `--env=""` and the shared account token are load-bearing.
 
 ## Dependency hygiene
 
@@ -66,8 +66,8 @@ alternatives table in [`docs/design-v1.2.md`](design-v1.2.md).
 
 ### terabox — the account's other Workers project
 
-Shared: the account-level **Workers Builds deploy token** (README, "Deploy &
-CI"). Deleting or rotating it breaks **both** projects' builds. Nothing else
+Shared: the account-level **Workers Builds deploy token** (docs/engineering.md,
+"Deploy & CI"). Deleting or rotating it breaks **both** projects' builds. Nothing else
 is shared — no code, config, or data stores.
 
 ### superpowers — the agent workflow itself
@@ -82,5 +82,5 @@ never rewritten.
 
 Single-shot verification only; never loop against the deployed worker. The
 in-app budget breaker protects D1 row-writes, not the Workers request quota
-or the Gemini quota — only discipline covers those. Full rules: the README's
-"Free-tier rules" section.
+or the Gemini quota — only discipline covers those. Full rules:
+`docs/engineering.md` § "Free-tier rules".

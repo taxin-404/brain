@@ -29,8 +29,8 @@ Known and by design — not vulnerabilities:
   `wrangler.jsonc` makes a production deploy fail loudly when real secrets
   are missing.
 - The free-tier AI provider may use non-`restricted` content to improve its
-  products (documented in the README and setup guide); `restricted` events
-  never leave the system.
+  products (documented in `docs/engineering.md` and the setup guide);
+  `restricted` events never leave the system.
 
 ## Supported versions
 
