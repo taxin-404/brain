@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { pickNew, toEvents, truncateStrings } from "../src/capture";
+import { makeSerialQueue, pickNew, toEvents, truncateStrings } from "../src/capture";
 
 const user = { type: "user", id: "msg_u1", time: { created: 1_700_000_000 }, text: "hello" };
 const assistant = {
@@ -36,5 +36,26 @@ describe("capture mapping", () => {
   it("drops events already recorded in local state", () => {
     const events = toEvents("ses_1", [user, shell]);
     expect(pickNew(events, new Set(["oc_msg_u1"])).map((e) => e.id)).toEqual(["oc_msg_s1"]);
+  });
+
+  it("serial queue runs tasks one at a time and survives rejections", async () => {
+    const enqueue = makeSerialQueue();
+    const order: string[] = [];
+    let active = 0;
+    let maxActive = 0;
+    const task = (name: string, ms: number, fail = false) =>
+      enqueue(async () => {
+        active += 1;
+        maxActive = Math.max(maxActive, active);
+        order.push(`start:${name}`);
+        await new Promise((r) => setTimeout(r, ms));
+        active -= 1;
+        order.push(`end:${name}`);
+        if (fail) throw new Error(name);
+      });
+    const results = await Promise.allSettled([task("a", 20), task("b", 5, true), task("c", 1)]);
+    expect(maxActive).toBe(1);
+    expect(order).toEqual(["start:a", "end:a", "start:b", "end:b", "start:c", "end:c"]);
+    expect(results.map((r) => r.status)).toEqual(["fulfilled", "rejected", "fulfilled"]);
   });
 });

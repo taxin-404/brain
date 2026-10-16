@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { decryptPayload } from "../src/crypto";
 import { readBudget } from "../src/budget";
 import type { EventInput } from "../src/ingest";
+import { ingestEvents } from "../src/ingest";
 import { bearer, call } from "./helpers";
 
 // Shared-state adaptation (plugin 1.4.2 has no per-test isolation):
@@ -82,5 +83,29 @@ describe("ingest", () => {
   it("requires propose scope", async () => {
     expect((await call("POST", "/v1/events", ev())).status).toBe(401);
     expect((await post(ev(), "MCP_READ")).status).toBe(403);
+  });
+
+  it("keeps key/blob consistent when duplicate batches race (claim before put)", async () => {
+    // Production incident 2026-10-16: the plugin fires ingest on several
+    // triggers at once (idle, step.ended, 30-min reconcile). Two racing
+    // batches both pass the pre-insert dedupe, both encrypt with fresh data
+    // keys, both put the same R2 key, then INSERT OR IGNORE keeps the *first*
+    // wrapped key — last-wins blob vs first-wins key left 1,678 prod payloads
+    // undecryptable. The blob must only be stored by the writer that claimed
+    // the event_keys row.
+    const entry = ev({ id: "race-fixed-1", session_id: "sess-race", payload: { text: "race me once" } });
+    const racing = await Promise.all([
+      ingestEvents(env, "MCP_PROPOSE", [entry]),
+      ingestEvents(env, "MCP_PROPOSE", [entry]),
+    ]);
+    expect(racing.flatMap((r) => r.results).filter((r) => r.status === "stored")).toHaveLength(1);
+    const key = await env.BRAIN_DB.prepare(`SELECT wrapped_key FROM event_keys WHERE event_id = ?1`)
+      .bind(entry.id)
+      .first<{ wrapped_key: string }>();
+    expect(key).not.toBeNull();
+    const obj = await env.BRAIN_RAW.get(`payloads/${entry.id}`);
+    expect(obj).not.toBeNull();
+    const plain = await decryptPayload(env.PAYLOAD_KEK, key!.wrapped_key, await obj!.arrayBuffer());
+    expect(JSON.parse(plain)).toEqual({ text: "race me once" });
   });
 });

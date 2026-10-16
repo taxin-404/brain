@@ -1,5 +1,5 @@
 import { Plugin, type StorageEntry } from "@opencode/plugin";
-import { pickNew, toEvents, type SessionMessageLike } from "./capture";
+import { makeSerialQueue, pickNew, toEvents, type SessionMessageLike } from "./capture";
 import { diag, enableDiag } from "./diag";
 
 diag("module_evaluated");
@@ -76,6 +76,10 @@ const brainCapture = Plugin.define({
     };
 
     const storageKey = (sessionID: string) => `${INGEST_PREFIX}${sessionID}`;
+    // All ingest runs are serialized: overlapping triggers used to re-send the
+    // same batch concurrently and race the Worker's claim inserts (prod
+    // incident 2026-10-16 — key/blob mismatch made payloads undecryptable).
+    const enqueue = makeSerialQueue();
     const readState = async (sessionID: string): Promise<IngestState> =>
       ((await ctx.storage.get(storageKey(sessionID))) as IngestState | undefined) ?? {};
     const writeState = async (sessionID: string, patch: IngestState): Promise<void> => {
@@ -135,7 +139,7 @@ const brainCapture = Plugin.define({
             const lastSeen = state.lastSeenAt ?? state.lastStatusAt ?? 0;
             if (lastSeen < Date.now() - RECONCILE_WINDOW_MS) continue;
             swept += 1;
-            ingested += await ingestSession(entry.key.slice(INGEST_PREFIX.length));
+            ingested += await enqueue(() => ingestSession(entry.key.slice(INGEST_PREFIX.length)));
           }
           after = scan.next;
         } while (after);
@@ -177,17 +181,17 @@ const brainCapture = Plugin.define({
                 lastStatusAt: Date.now(),
                 lastSeenAt: Date.now(),
               });
-              if (statusType === "idle") void ingestSession(sessionID);
+              if (statusType === "idle") void enqueue(() => ingestSession(sessionID));
             }
             continue;
           }
           if (type === "session.idle" && sessionID) {
-            void ingestSession(sessionID);
+            void enqueue(() => ingestSession(sessionID));
             continue;
           }
           if (type === "session.step.ended" && sessionID) {
             void writeState(sessionID, { lastSeenAt: Date.now() });
-            void ingestSession(sessionID);
+            void enqueue(() => ingestSession(sessionID));
           }
         }
       } catch (error) {

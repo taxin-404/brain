@@ -141,3 +141,20 @@ export function toEvents(sessionID: string, messages: SessionMessageLike[]): Cap
 export function pickNew(events: CaptureEvent[], ingestedIds: ReadonlySet<string>): CaptureEvent[] {
   return events.filter((event) => !ingestedIds.has(event.id));
 }
+
+/** Serial queue: runs tasks strictly one at a time, in FIFO order. The capture
+ *  plugin fires ingest from several triggers (idle, step.ended, 30-min
+ *  reconcile) without awaiting earlier runs; unserialized they re-send
+ *  identical batches concurrently and race the Worker's dedupe/claim inserts
+ *  (prod incident 2026-10-16). Rejections stay contained to the failing task. */
+export function makeSerialQueue(): <T>(fn: () => Promise<T>) => Promise<T> {
+  let tail: Promise<unknown> = Promise.resolve();
+  return <T>(fn: () => Promise<T>): Promise<T> => {
+    const run = tail.then(fn);
+    tail = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run;
+  };
+}

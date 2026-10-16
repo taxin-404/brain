@@ -50,10 +50,11 @@ interface Prepared {
   excerpt: string;
   hmac: string;
   wrappedKey: string;
+  blob: ArrayBuffer;
 }
 
 /** Validate + redact + excerpt + size-check one entry. Pure of DB/R2 writes. */
-function prepareEntry(entry: EventInput): { fields: Omit<Prepared, "hmac" | "wrappedKey">; redactedBody: string } {
+function prepareEntry(entry: EventInput): { fields: Omit<Prepared, "hmac" | "wrappedKey" | "blob">; redactedBody: string } {
   if (!entry || typeof entry !== "object" || Array.isArray(entry)) throw new IngestError("bad_request", "entry must be an object");
   if (!SOURCES.includes(entry.source)) throw new IngestError("bad_request", "invalid source");
   if (!ACTORS.includes(entry.actor)) throw new IngestError("bad_request", "invalid actor");
@@ -131,12 +132,17 @@ export async function ingestEvents(env: Env, scope: Scope, entries: EventInput[]
     batchIds.add(p.id);
     if (sessionKey !== null) batchSessionHmacs.add(sessionKey);
 
-    // Encrypt + store the raw blob now, for new rows only. Orphaned R2 objects
-    // on a post-write failure (charge rejection / D1 error) are accepted.
+    // Encrypt now, store the blob only after the claim inserts land. Two
+    // racing duplicate batches both pass the pre-insert dedupe and both
+    // encrypt with fresh data keys; only the batch whose event_keys INSERT
+    // actually lands owns `payloads/<id>`. A last-wins R2 put from the loser
+    // would pair its orphaned data key with the winner's wrapped key and make
+    // the payload permanently undecryptable (prod incident 2026-10-16: 1,678
+    // payloads). A crash between claim and put leaves a key without a blob —
+    // degraded, but never a key/blob mismatch.
     const { blob, wrappedKey } = await encryptPayload(env.PAYLOAD_KEK, redactedBody);
-    await env.BRAIN_RAW.put(`payloads/${p.id}`, blob);
 
-    prepared.push({ ...p, hmac, wrappedKey });
+    prepared.push({ ...p, hmac, wrappedKey, blob });
     results.push({ id: p.id, status: "stored" });
   }
 
@@ -168,16 +174,22 @@ export async function ingestEvents(env: Env, scope: Scope, entries: EventInput[]
     // inserts actually landed; raced rows report "duplicate" exactly like the
     // sequential dedupe path. Budget was charged on the pre-race count (p.length).
     const resultIndex = new Map(results.map((r, i) => [r.id, i] as const));
+    const puts: Array<Promise<unknown>> = [];
     for (let i = 0; i < prepared.length; i += 1) {
       const p = prepared[i];
-      const changes = batchResults[i * 2]?.meta?.changes ?? 0;
-      if (changes > 0) {
+      const eventLanded = (batchResults[i * 2]?.meta?.changes ?? 0) > 0;
+      const keyLanded = (batchResults[i * 2 + 1]?.meta?.changes ?? 0) > 0;
+      // Blob ownership follows the event_keys claim, never the events claim
+      // alone or the arrival order of R2 puts.
+      if (eventLanded && keyLanded) puts.push(env.BRAIN_RAW.put(`payloads/${p.id}`, p.blob));
+      if (eventLanded) {
         stored += 1;
       } else {
         const idx = resultIndex.get(p.id);
         if (idx !== undefined) results[idx] = { id: p.id, status: "duplicate" };
       }
     }
+    await Promise.all(puts);
   }
 
   return { results, stored, charged: prepared.length };
