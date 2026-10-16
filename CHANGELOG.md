@@ -13,6 +13,11 @@ Pre-1.0: minor versions may change behavior; patch versions are fixes only.
 - The setup guide now walks the Workers Builds dashboard import flow —
   project name, build / deploy / preview field values, preview builds off —
   in [`docs/setup.md`](docs/setup.md) §6.
+- The quick deploy now ships an **env chart** (README → *Visual quick deploy*
+  → *The envs*): every value the worker reads, where to set it, and what to
+  put — and `package.json` declares `cloudflare.bindings` descriptions so
+  Cloudflare setup flows know what to prompt for. `GITHUB_TOKEN` (optional)
+  is documented in [`docs/setup.md`](docs/setup.md) §3.
 
 ### Changed
 

@@ -72,12 +72,29 @@ changes that **you** review.
 
 4. In **Workers & Pages → Create → Continue with GitHub**, select your fork and set: name `brain-api`, build command `npm ci && npm test`, deploy command `npx wrangler deploy --env=""`, and **turn OFF preview builds**. Click **Deploy**.
 
-5. The first deploy stops with *Missing required secrets* — on purpose. Add the six secrets (`PAYLOAD_KEK`, `CONTENT_HMAC_KEY`, `MCP_READ_TOKEN`, `MCP_PROPOSE_TOKEN`, `ADMIN_TOKEN`, `GEMINI_API_KEY`) under the Worker → **Settings → Variables and Secrets**, then hit **Retry deployment**.
+5. The first deploy stops with *Missing required secrets* — on purpose. Add the values from [The envs](#the-envs) below under the Worker → **Settings → Variables and Secrets**, then hit **Retry deployment**.
 
 6. `GET <worker-url>/v1/health-report` with your `ADMIN_TOKEN` — a fresh install answers with zeros. Then wire up OpenCode (see [docs/setup.md](./docs/setup.md) §7).
 
 - The default `*.workers.dev` hostname works as-is; add a custom domain under Worker → **Settings → Domains & Routes**.
 - Prefer the terminal end to end? → [CLI deploy](#cli-deploy) below.
+
+### The envs
+
+Everything the worker reads — the dashboard rows are what step 5 sets:
+
+| Name | Set where | Value |
+| --- | --- | --- |
+| `AI_GATEWAY_BASE` | `wrangler.jsonc` (step 2) | `https://gateway.ai.cloudflare.com/v1/<account_id>/brain/google-ai-studio` |
+| `PAYLOAD_KEK` | dashboard secret | any 32+ char random string — **escrow it; if lost, encrypted data is unrecoverable** |
+| `CONTENT_HMAC_KEY` | dashboard secret | any 32+ char random string |
+| `MCP_READ_TOKEN` | dashboard secret | any 32+ char random string — read scope |
+| `MCP_PROPOSE_TOKEN` | dashboard secret | any 32+ char random string — write scope; must differ from the read token |
+| `ADMIN_TOKEN` | dashboard secret | any 32+ char random string — admin routes |
+| `GEMINI_API_KEY` | dashboard secret | a free key from [Google AI Studio](https://aistudio.google.com) |
+| `GITHUB_TOKEN` | dashboard secret, *optional* | GitHub token for the activity connector; raises rate limits |
+
+No format requirements on the random strings — your password manager's generator is enough (**make every value different**). The same list, with descriptions, ships in `package.json` (`cloudflare.bindings`) — so Cloudflare setup flows know what to ask for.
 
 > [!TIP]
 > brain is designed for the Cloudflare **free plan** — an in-app budget breaker

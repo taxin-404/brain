@@ -3,6 +3,43 @@
   "version": "0.1.0",
   "private": true,
   "license": "MIT",
+  "cloudflare": {
+    "bindings": {
+      "PAYLOAD_KEK": {
+        "description": "Random string (32+ chars). Wraps per-event data keys — payload encryption at rest. Escrow it: if lost, encrypted data is unrecoverable."
+      },
+      "CONTENT_HMAC_KEY": {
+        "description": "Random string (32+ chars). Signs export links and confirm tokens."
+      },
+      "MCP_READ_TOKEN": {
+        "description": "Random string (32+ chars). Read scope — REST reads + the recall MCP connection."
+      },
+      "MCP_PROPOSE_TOKEN": {
+        "description": "Random string (32+ chars). Propose scope — capture-plugin ingest + write MCP tools. Must differ from the read token."
+      },
+      "ADMIN_TOKEN": {
+        "description": "Random string (32+ chars). Owner key — apply/discard, exports, purge, manual kicks."
+      },
+      "GEMINI_API_KEY": {
+        "description": "Google AI Studio key (aistudio.google.com), sent through your AI Gateway — free tier works."
+      },
+      "GITHUB_TOKEN": {
+        "description": "(Optional) GitHub token for the activity connector — raises API rate limits."
+      },
+      "AI_GATEWAY_BASE": {
+        "description": "Your AI Gateway endpoint: https://gateway.ai.cloudflare.com/v1/<account_id>/brain/google-ai-studio"
+      },
+      "BRAIN_DB": {
+        "description": "D1 database: event log and derived memory."
+      },
+      "BRAIN_RAW": {
+        "description": "R2 bucket: raw captures, exports and backups."
+      },
+      "VECTORIZE": {
+        "description": "Vectorize index for semantic recall (768 dims, cosine)."
+      }
+    }
+  },
   "type": "module",
   "scripts": {
     "test": "vitest run",

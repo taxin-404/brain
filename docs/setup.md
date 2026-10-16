@@ -90,6 +90,12 @@ npx wrangler d1 migrations apply brain-db --remote    # expect 0001–0006
 | `MCP_PROPOSE_TOKEN` | propose scope — capture-plugin ingest + `brain-propose` MCP writes | `openssl rand -hex 32` |
 | `ADMIN_TOKEN` | owner key — apply/discard, exports, purge, manual kicks | `openssl rand -hex 32` |
 | `GEMINI_API_KEY` | Google AI Studio key (sent through the gateway) | AI Studio console |
+| `GITHUB_TOKEN` | *optional* — GitHub activity connector (raises rate limits) | GitHub → Developer settings → PAT |
+
+The `openssl` generators above are convenience: any long random string works —
+there are no format requirements (the KEK is SHA-256-stretched before use).
+Dashboard-first version of this list: README → *Visual quick deploy* → *The
+envs*.
 
 ```bash
 # 1. Generate every value into .secrets/prod.env (gitignored via .secrets/).
