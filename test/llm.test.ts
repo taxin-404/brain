@@ -14,7 +14,7 @@ import {
   LlmError,
 } from "../src/llm";
 import { network } from "./server";
-import { setEnvVars } from "./helpers";
+import { fakeVec, setEnvVars } from "./helpers";
 
 const GEN_URL = "https://gw.test/google-ai-studio/v1beta/models/gemini-3.5-flash-lite:generateContent";
 const FALLBACK_URL = "https://gw.test/google-ai-studio/v1beta/models/gemini-3.1-flash-lite:generateContent";
@@ -565,5 +565,116 @@ describe("llm via an OpenAI-compatible provider", () => {
     );
     await llmJson(env, { model: "custom-1", user: "Say ok" }, (v) => v);
     expect(seen.body.model).toBe("custom-1");
+  });
+});
+
+describe("compatible embeddings (embedTexts)", () => {
+  const EMB_COMPAT_URL = "https://oai.test/v1/embeddings";
+
+  interface CompatEmbBody {
+    model?: string;
+    input?: string[];
+    dimensions?: number;
+  }
+
+  const clearAiEnv = () =>
+    setEnvVars({
+      AI_BASE_URL: undefined,
+      AI_API_KEY: undefined,
+      AI_MODEL: undefined,
+      AI_FALLBACK_MODEL: undefined,
+      AI_EMBED_BASE_URL: undefined,
+      AI_EMBED_API_KEY: undefined,
+      AI_EMBED_MODEL: undefined,
+      AI_EMBED_DIMS: undefined,
+      GEMINI_API_KEY: "dev-gemini",
+    });
+
+  beforeAll(async () => {
+    await network.enable();
+  });
+  afterEach(() => {
+    network.resetHandlers();
+    clearAiEnv();
+  });
+  afterAll(async () => {
+    await network.disable();
+  });
+
+  it("posts {model, input} without dimensions by default and stays keyless", async () => {
+    setEnvVars({
+      AI_BASE_URL: "https://oai.test/v1",
+      AI_EMBED_MODEL: "text-embedding-3-small",
+      AI_EMBED_API_KEY: "",
+      AI_API_KEY: "",
+      GEMINI_API_KEY: "",
+    });
+    const seen: { auth: string | null; body: CompatEmbBody } = { auth: null, body: {} };
+    network.use(
+      http.post(EMB_COMPAT_URL, async ({ request }) => {
+        seen.auth = request.headers.get("authorization");
+        seen.body = (await request.json()) as CompatEmbBody;
+        return HttpResponse.json({ data: (seen.body.input ?? []).map((t) => ({ embedding: fakeVec(t) })) });
+      }),
+    );
+    const out = await embedTexts(env, ["alpha", "beta"]);
+    expect(seen.auth).toBeNull();
+    expect(seen.body.model).toBe("text-embedding-3-small");
+    expect(seen.body.input).toEqual(["alpha", "beta"]);
+    expect(seen.body.dimensions).toBeUndefined();
+    expect(out).toHaveLength(2);
+    expect(out[0]).toEqual(fakeVec("alpha"));
+    expect(out[1]).toEqual(fakeVec("beta"));
+  });
+
+  it("orders the response by index when the provider returns items out of order", async () => {
+    setEnvVars({ AI_BASE_URL: "https://oai.test/v1", AI_EMBED_MODEL: "m" });
+    network.use(
+      http.post(EMB_COMPAT_URL, () =>
+        HttpResponse.json({
+          data: [
+            { index: 1, embedding: fakeVec("b") },
+            { index: 0, embedding: fakeVec("a") },
+          ],
+        }),
+      ),
+    );
+    const out = await embedTexts(env, ["a", "b"]);
+    expect(out[0]).toEqual(fakeVec("a"));
+    expect(out[1]).toEqual(fakeVec("b"));
+  });
+
+  it("sends dimensions only when AI_EMBED_DIMS is set", async () => {
+    setEnvVars({ AI_BASE_URL: "https://oai.test/v1", AI_EMBED_MODEL: "m", AI_EMBED_DIMS: "1536" });
+    const seen: { body: CompatEmbBody } = { body: {} };
+    network.use(
+      http.post(EMB_COMPAT_URL, async ({ request }) => {
+        seen.body = (await request.json()) as CompatEmbBody;
+        return HttpResponse.json({
+          data: (seen.body.input ?? []).map(() => ({ embedding: new Array(1536).fill(0.5) })),
+        });
+      }),
+    );
+    const out = await embedTexts(env, ["one"]);
+    expect(seen.body.dimensions).toBe(1536);
+    expect(out[0]).toHaveLength(1536);
+  });
+
+  it("rejects a response with the wrong count", async () => {
+    setEnvVars({ AI_BASE_URL: "https://oai.test/v1", AI_EMBED_MODEL: "m" });
+    network.use(http.post(EMB_COMPAT_URL, () => HttpResponse.json({ data: [{ embedding: fakeVec("only") }] })));
+    await expect(embedTexts(env, ["one", "two"])).rejects.toMatchObject({ code: "parse" });
+  });
+
+  it("rejects wrong-size vectors and names the fix", async () => {
+    setEnvVars({ AI_BASE_URL: "https://oai.test/v1", AI_EMBED_MODEL: "m" });
+    network.use(
+      http.post(EMB_COMPAT_URL, () => HttpResponse.json({ data: [{ embedding: new Array(512).fill(0.1) }] })),
+    );
+    const err = (await embedTexts(env, ["one"]).catch((e) => e)) as LlmError;
+    expect(err.code).toBe("parse");
+    expect(err.message).toMatch(/512/);
+    expect(err.message).toMatch(/768/);
+    expect(err.message).toMatch(/Vectorize/);
   });
 });

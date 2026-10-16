@@ -361,28 +361,69 @@ interface BatchEmbedResponse {
   embeddings?: Array<{ values?: number[] }>;
 }
 
+interface CompatEmbedResponse {
+  data?: Array<{ embedding?: number[]; index?: number }>;
+}
+
 export async function embedTexts(env: Env, texts: string[]): Promise<number[][]> {
+  const cfg = embedConfig(env);
   const out: number[][] = [];
   for (let i = 0; i < texts.length; i += EMBED_CHUNK) {
     const chunk = texts.slice(i, i + EMBED_CHUNK);
-    const resp = (await postJson(env, `/v1beta/models/${EMBEDDING_MODEL}:batchEmbedContents`, {
-      requests: chunk.map((text) => ({
-        model: `models/${EMBEDDING_MODEL}`,
-        content: { parts: [{ text }] },
-        outputDimensionality: EMBEDDING_DIMS,
-      })),
-    })) as BatchEmbedResponse;
-    const embeddings = resp.embeddings ?? [];
-    if (embeddings.length !== chunk.length) {
-      throw new LlmError("parse", `embedding count ${embeddings.length} != ${chunk.length}`);
+    const vectors = cfg.mode === "native" ? await embedChunkNative(env, cfg, chunk) : await embedChunkCompat(cfg, chunk);
+    out.push(...vectors);
+  }
+  return out;
+}
+
+/** Gemini-native batch embeddings. outputDimensionality is always sent (the
+ *  API supports truncation), unlike the compat path's opt-in dimensions. */
+async function embedChunkNative(env: Env, cfg: EmbedConfig, chunk: string[]): Promise<number[][]> {
+  const resp = (await postJson(env, `/v1beta/models/${cfg.model}:batchEmbedContents`, {
+    requests: chunk.map((text) => ({
+      model: `models/${cfg.model}`,
+      content: { parts: [{ text }] },
+      outputDimensionality: cfg.dims,
+    })),
+  })) as BatchEmbedResponse;
+  const embeddings = resp.embeddings ?? [];
+  if (embeddings.length !== chunk.length) {
+    throw new LlmError("parse", `embedding count ${embeddings.length} != ${chunk.length}`);
+  }
+  const out: number[][] = [];
+  for (const e of embeddings) {
+    const values = e.values ?? [];
+    if (values.length !== cfg.dims) {
+      throw new LlmError("parse", `embedding dims ${values.length} != ${cfg.dims}`);
     }
-    for (const e of embeddings) {
-      const values = e.values ?? [];
-      if (values.length !== EMBEDDING_DIMS) {
-        throw new LlmError("parse", `embedding dims ${values.length} != ${EMBEDDING_DIMS}`);
-      }
-      out.push(values);
+    out.push(values);
+  }
+  return out;
+}
+
+/** OpenAI-compatible embeddings. `dimensions` is opt-in (some providers
+ *  reject unknown parameters); vectors are ordered by `index` when present. */
+async function embedChunkCompat(cfg: EmbedConfig, chunk: string[]): Promise<number[][]> {
+  const body: Record<string, unknown> = { model: cfg.model, input: chunk };
+  if (cfg.dimsExplicit) body.dimensions = cfg.dims;
+  const resp = (await postCompatJson(cfg, "/embeddings", body)) as CompatEmbedResponse;
+  const data = resp.data;
+  if (!Array.isArray(data) || data.length !== chunk.length) {
+    throw new LlmError("parse", `ai provider embedding count ${data?.length ?? 0} != ${chunk.length}`);
+  }
+  const ordered = data.every((d) => typeof d.index === "number")
+    ? [...data].sort((a, b) => (a.index ?? 0) - (b.index ?? 0))
+    : data;
+  const out: number[][] = [];
+  for (const d of ordered) {
+    const values = d.embedding ?? [];
+    if (values.length !== cfg.dims) {
+      throw new LlmError(
+        "parse",
+        `ai provider embedding dims ${values.length} != ${cfg.dims} (must match the Vectorize index: recreate it at ${cfg.dims} dims or fix AI_EMBED_DIMS)`,
+      );
     }
+    out.push(values);
   }
   return out;
 }
