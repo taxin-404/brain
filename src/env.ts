@@ -41,6 +41,17 @@ export interface Env {
   AI_EMBED_DIMS?: string;
 }
 export const TRUST = { user: 1.0, assistant: 0.9, tool: 0.7, external: 0.4 } as const;
+/** Names of the secrets the worker cannot run without: the KEK (payload
+ *  encryption) and the admin token (the only credential on a minimal setup).
+ *  Empty strings count as missing. AI keys are deliberately excluded — a
+ *  non-Google setup needs no Gemini key, and AI misconfiguration surfaces in
+ *  the health report instead of blocking every route. */
+export function missingRequiredSecrets(env: Env): string[] {
+  const missing: string[] = [];
+  if (!env.PAYLOAD_KEK) missing.push("PAYLOAD_KEK");
+  if (!env.ADMIN_TOKEN) missing.push("ADMIN_TOKEN");
+  return missing;
+}
 export function canRead(scope: Scope): boolean {
   return scope === "MCP_READ" || scope === "ADMIN";
 }

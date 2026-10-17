@@ -1,6 +1,8 @@
 import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
+import { resolveScope } from "../src/auth";
 import { dayKey } from "../src/budget";
+import type { Env } from "../src/env";
 import { bearer, call, setEnvVars } from "./helpers";
 
 describe("auth + health", () => {
@@ -17,11 +19,22 @@ describe("auth + health", () => {
     };
     try {
       setEnvVars({ ADMIN_TOKEN: undefined, MCP_PROPOSE_TOKEN: undefined, MCP_READ_TOKEN: undefined });
-      // `Bearer undefined` is not a credential — no token set means no access.
-      expect((await call("GET", "/v1/health-report", undefined, { authorization: "Bearer undefined" })).status).toBe(401);
+      // No admin token = the worker refuses to serve at all (503, never 200),
+      // so `Bearer undefined` cannot authenticate via the HTTP surface...
+      const res = await call("GET", "/v1/health-report", undefined, { authorization: "Bearer undefined" });
+      expect(res.status).toBe(503);
+      // ...and the resolveScope guard itself still refuses tokenless matches.
+      const head = (authorization: string) => new Request("https://brain.test/", { headers: { authorization } });
+      const bare = {
+        ADMIN_TOKEN: undefined,
+        MCP_PROPOSE_TOKEN: undefined,
+        MCP_READ_TOKEN: undefined,
+      } as unknown as Env;
+      expect(resolveScope(head("Bearer undefined"), bare)).toBeNull();
       // An empty-string secret must not match `Bearer ` either.
-      setEnvVars({ MCP_READ_TOKEN: "" });
-      expect((await call("GET", "/v1/health-report", undefined, { authorization: "Bearer " })).status).toBe(401);
+      const empty = { ADMIN_TOKEN: "a", MCP_PROPOSE_TOKEN: "p", MCP_READ_TOKEN: "" } as unknown as Env;
+      expect(resolveScope(head("Bearer "), empty)).toBeNull();
+      expect(resolveScope(head("Bearer a"), empty)).toBe("ADMIN");
     } finally {
       setEnvVars(original);
     }

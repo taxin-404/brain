@@ -1,4 +1,5 @@
 import type { Env, Need, Scope } from "./env";
+import { missingRequiredSecrets } from "./env";
 import { resolveScope, requireScope } from "./auth";
 import { ensureSchema } from "./bootstrap";
 import { json } from "./http";
@@ -219,8 +220,28 @@ export function routeCron(cron: string): CronJob | null {
   }
 }
 
+/** Deploys go green with no secrets (2026-10-17, replaced `secrets.required`);
+ *  the worker instead answers 503 naming exactly what to paste. Readable with
+ *  zero credentials at `GET /v1/health-report` — that is the discovery step. */
+function notConfigured(env: Env, missing: string[]): Response {
+  const aiNote =
+    env.GEMINI_API_KEY || env.AI_BASE_URL
+      ? ""
+      : " Extraction additionally needs GEMINI_API_KEY (or AI_BASE_URL + AI_MODEL).";
+  return json(
+    {
+      error: "not configured",
+      missing,
+      hint: `Set these as Worker secrets: Settings → Variables and Secrets (see README, The envs), then reload.${aiNote}`,
+    },
+    503,
+  );
+}
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    const missing = missingRequiredSecrets(env);
+    if (missing.length > 0) return notConfigured(env, missing);
     try {
       await ensureSchema(env.BRAIN_DB);
     } catch (error) {
@@ -249,6 +270,11 @@ export default {
     ctx.waitUntil(
       (async () => {
         try {
+          const missing = missingRequiredSecrets(env);
+          if (missing.length > 0) {
+            console.log(`[cron] not configured (missing: ${missing.join(", ")}); skipping ${controller.cron}`);
+            return;
+          }
           await ensureSchema(env.BRAIN_DB);
           switch (job) {
             case "sweep":

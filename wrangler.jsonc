@@ -9,15 +9,13 @@
   // (encrypted) are never touched by deploys either way.
   "keep_vars": true,
 
-  // Fail deploy loudly if a required secret is missing on the Worker, instead of
-  // silently shipping a worker whose endpoints all reject requests. Default-minimal
-  // setup = three: the KEK (encryption), one admin token (auth), the model key.
-  // The other three are optional hardening: CONTENT_HMAC_KEY (else derived from
-  // the KEK), MCP_READ_TOKEN / MCP_PROPOSE_TOKEN (else the admin token is the
-  // only credential — set them to give clients scoped-down access).
-  "secrets": {
-    "required": ["PAYLOAD_KEK", "ADMIN_TOKEN", "GEMINI_API_KEY"]
-  },
+  // No deploy-time secret gate: deploys always go green, and the worker reports
+  // what is missing itself — until PAYLOAD_KEK and ADMIN_TOKEN are set it answers
+  // 503 `not configured` naming them (readable at /v1/health-report with no
+  // credentials), so forks configure right after the first deploy instead of
+  // pasting secrets before a retry. The other secrets are optional hardening:
+  // CONTENT_HMAC_KEY (else derived from the KEK), MCP_READ_TOKEN /
+  // MCP_PROPOSE_TOKEN (else the admin token is the only credential).
 
   // Id-less on purpose: on a fresh account the deploy auto-provisions `brain-db`
   // (and `brain-raw` below) under these exact names; on existing accounts the
