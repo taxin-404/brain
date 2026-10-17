@@ -69,3 +69,39 @@ Reference: `taxin-404/nodewarden` (fork of shuaiplus/NodeWarden) — clone for s
 - T7 remaining: complete the e2e (six secrets → Retry → health zeros; then pin the dashboard delete-flow wording); KEK escrow deletion still held. Reviewer declined-to-judge list (dashboard wording pins, live Vectorize token matrix, prod var→secret state) is ledger-covered or owner-pending.
 
 Open item carried: fresh-account end-to-end test (owner creates account; connects fork; red build → six secrets → retry → health; delete-flow wording pin).
+
+## 2026-10-17 — default-minimal secrets (owner directive: "lets make defaults")
+
+- Directive: owner wants fewer envs after the fresh-account burden ("why is all
+  the envs i have to remember?"). Ruling: the minimal setup is the three values
+  that cannot be defaulted (KEK, ADMIN_TOKEN, GEMINI_API_KEY); the other three
+  become optional with working defaults. Direct execution, no design-Q&A
+  (standing owner preference).
+- `79b620c` feat(secrets): `contentSigningSecret` — HMAC-SHA256(KEK,
+  `brain/content-hmac/v1`), derived only when `CONTENT_HMAC_KEY` is unset
+  (deterministic per KEK; explicit value always wins). Call sites:
+  `ingest.ts:113`, `exporter.ts:128/549` (mint + verify). `env.ts`: the three
+  become optional with contract comments. `wrangler.jsonc`: `secrets.required`
+  → `PAYLOAD_KEK, ADMIN_TOKEN, GEMINI_API_KEY`. Migration 0001 `content_hmac`
+  comment refreshed (comment-only) + `migrations:embed` regen. Tests (RED
+  first): crypto derivation (deterministic / KEK-sensitive / never the raw KEK
+  / explicit wins), auth minimal-env pin (admin is the only credential; literal
+  `Bearer undefined` stays 401), ingest dedupe under the derived secret; the
+  export expired-token fixture re-derives through the helper. Gate: **287
+  green (40 files) + tsc clean**.
+- `f6deeff` docs: README (step 3, envs table defaults, FAQ, CLI comment),
+  setup.md §3 (required three generated, hardening trio commented; warning
+  that an empty `GEMINI_API_KEY` still counts as set for `--secrets-file`;
+  required/optional loops split so the optional three are set only when
+  present), §4/§6A/§10 wording, §7 minimal client config (`ADMIN_TOKEN` in all
+  three places), engineering.md (the `resolveScope` non-empty guard is now
+  load-bearing, not defense in depth), key-rotation.md (with derived signing,
+  KEK rotation also changes content keys + invalidates export links),
+  package.json binding descriptions, .dev.vars.example note, spec amendment 7
+  (incl. "setting CONTENT_HMAC_KEY later changes content keys" ordering note).
+- Prod impact: none by construction — all six are set there, so the explicit
+  HMAC path and token matching are byte-identical; the required-list change is
+  deploy-time only. Next prod build ships the new bundle (watch CI + build +
+  one health smoke). Fresh-account e2e: on a synced fork the retry now expects
+  three names, not six; the six-name error already seen belongs to the old
+  config.
