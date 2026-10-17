@@ -24,6 +24,11 @@ up; prod resources verified untouched. Full detail:
 - **D1/R2 auto-provision at deploy** when an id-less binding names a missing
   resource — created with the exact configured name. Id-less binding + existing
   name binds it; redeploys show `(inherited)`; no id write-back into config.
+  Fresh-account dashboard run (2026-10-17): the failing first deploy (missing
+  secrets) still provisions D1 `brain-db` + R2 `brain-raw` (plus the Vectorize
+  index) and the retry reuses them; a fresh CLI account (`workerExists=false`)
+  throws before upload instead — only the index exists, `--secrets-file`
+  required (source: wrangler 4.151 branch at cli.js:176346).
 - **Vectorize is NOT auto-provisioned** — deploy hard-fails, code `10159`.
 - **Deleting the Worker leaves D1/R2 intact** (both `wrangler delete` and the
   beta workers endpoint); versions/deployments/DO namespaces go with the worker.

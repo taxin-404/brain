@@ -290,7 +290,11 @@ live.
 - **Fork-safe config:** `wrangler.jsonc` carries no `database_id` (the D1
   binding auto-provisions `brain-db` by name on a fresh account and re-links on
   existing ones — probe battery 2026-10-16) and no owner-specific vars
-  (`AI_GATEWAY_BASE` is a secret now).
+  (`AI_GATEWAY_BASE` is a secret now). Fresh-account dashboard run 2026-10-17:
+  the failing first deploy (missing secrets) already provisions D1 `brain-db`,
+  R2 `brain-raw` and the Vectorize index; the retry reuses everything. A fresh
+  **CLI** account differs — wrangler's `workerExists=false` branch throws before
+  upload (only the Vectorize index exists) and directs to `--secrets-file`.
 - **Secrets survive deploys** (worker-level, never touched by a deploy):
   `PAYLOAD_KEK`, `CONTENT_HMAC_KEY`, `MCP_READ_TOKEN`, `MCP_PROPOSE_TOKEN`,
   `ADMIN_TOKEN`, `GEMINI_API_KEY` (+ `AI_GATEWAY_BASE`). `secrets.required` in

@@ -139,8 +139,22 @@ else
   #  are set in the dashboard — see "Optional: non-Google AI provider" above.)
 fi
 
-# 2. Escrow the file in your password manager FIRST (see below), then push all six
-#    to the worker (piping works non-interactively; --env="" targets the top-level config):
+# 2. Escrow the file in your password manager FIRST (see below) — then get the
+#    six onto the worker. The route depends on whether the worker exists yet;
+#    see the two variants right below this block.
+```
+
+**Fresh account — no worker yet.** `wrangler secret put` needs an existing
+worker; the first deploy carries the secrets via `--secrets-file`:
+
+```bash
+node scripts/ensure-vectorize.mjs   # same first half as `npm run deploy`
+npx wrangler deploy --env="" --secrets-file .secrets/prod.env
+```
+
+**Existing worker** (rotation, or any later re-set):
+
+```bash
 set -a; source .secrets/prod.env; set +a
 for s in PAYLOAD_KEK CONTENT_HMAC_KEY MCP_READ_TOKEN MCP_PROPOSE_TOKEN ADMIN_TOKEN GEMINI_API_KEY; do
   [ -n "${!s}" ] || { echo "ABORT: $s is empty — edit .secrets/prod.env, re-source, re-run"; break; }
@@ -164,9 +178,11 @@ npm ci && npm test && npx tsc --noEmit    # local gate — green before any depl
 npm run deploy                            # = ensure-vectorize + wrangler deploy --env=""
 ```
 
-The first CLI deploy stops with *"The following required secrets have not been set"* until §3 has run —
-that is `secrets.required` working as intended; re-run it after setting the
-secrets. Every later deploy also re-checks (and provisions, when missing) the
+Deploys fail loudly with *"The following required secrets have not been set"*
+until the six secrets are on the worker — `secrets.required` working as
+intended (§3; on a fresh CLI account the first deploy must carry them via
+`--secrets-file`, or deploy through the dashboard, which pre-creates the
+worker). Every deploy also re-checks (and provisions, when missing) the
 Vectorize index before uploading.
 
 **Never `wrangler deploy --env prod`.** `wrangler.jsonc` carries inert
@@ -218,10 +234,12 @@ exactly these values:
 | Enable Preview builds | **turn OFF** — previews would run against the same prod D1/R2; there is no preview isolation yet. |
 | Protect with Cloudflare Access | leave OFF — the worker authenticates with its own tokens. |
 
-Click **Deploy**. If §3 has not run yet, the first build fails loudly at the
-deploy step with *"The following required secrets have not been set"* — by design (`secrets.required`):
-set the six secrets, then re-run the build. Every later push to `master` runs
-the same pipeline.
+Click **Deploy**. If the six secrets are not set yet, the first build fails
+loudly at the deploy step with *"The following required secrets have not been
+set"* — by design (`secrets.required`): set the six secrets, then re-run the
+build. The failed run still creates D1 `brain-db`, R2 `brain-raw` and the
+Vectorize index (observed on a fresh account 2026-10-17) — the retry reuses
+them. Every later push to `master` runs the same pipeline.
 
 **B. Existing worker** — dashboard → *Workers & Pages* → `brain-api` →
 *Settings* → *Builds* → connect the GitHub repo, production branch `master`,
