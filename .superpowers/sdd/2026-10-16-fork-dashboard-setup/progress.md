@@ -156,3 +156,12 @@ Open item carried: fresh-account end-to-end test (owner creates account; connect
   - Net status: the full fork story is now verified end to end on a fresh
     account with **two** secrets and a worst-case first-run (wrong create
     path + typo'd deploy command). No config changes required at any point.
+- 2026-10-17d token hygiene: owner revoked stray API/build tokens in the
+  dashboard (2× orphan `brain build token` with no namesake worker anywhere;
+  one-shot `brain-builds-setup`; dupe within the tes1ing `brain-api build
+  token` pair [API showed exactly 2 on d5d15d42 via new cloudflare MCP
+  (single-account-scoped tes1ing); logic: newest = live]; dormant
+  nodewarden/responsive-web-design build tokens). Kept: prod brain-api build
+  token (live — prod builds on every push), Cloudflare Agent / Agent Token
+  (session access). Verification push: this commit — expect prod build green
+  AND tes1ing deploy in audit-logs within minutes.
