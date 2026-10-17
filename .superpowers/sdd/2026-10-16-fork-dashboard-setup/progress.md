@@ -236,3 +236,14 @@ Open item carried: fresh-account end-to-end test (owner creates account; connect
   RED was real (this session's misses); GREEN subagent re-run handled all
   three scenarios correctly (dedupe-first, no double-store of "i have a
   brother", health-checked non-loss). Gate + push follow.
+- 2026-10-17h "keep going" housekeeping cycle: (1) verified the globally
+  installed brain-memory skill on this machine carries the 665405b upgrade
+  (marker grep = 2 hits); (2) dependabot sweep of 3 open PRs judged on CI
+  evidence — merged #2 (actions/checkout 5→7, suites pass) and #3 (plugin
+  vitest 4.1.11→5.0.4, both suites pass) [1b9e163, 40aefaa]; kept #4 root
+  vitest →5.0.4 OPEN: Worker suite fails 40/40 files with zero tests —
+  @cloudflare/vitest-plugin not vitest-5-compatible yet; not our bug, leave
+  for dependabot rebases + upstream compat; (3) brain-connect skill gained
+  the proposal-created-equals-not-applied mistake entry pointing at rest-
+  recipes admin verbs (the exact gap the urgency protocol solved on the
+  memory side). Root deps intentionally left on vitest 4 until #4 is green.

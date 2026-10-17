@@ -82,3 +82,6 @@ only store what they deliberately propose.
 - 401 after a token rotation → both entries and the plugin need the new value
 - tokens pasted into committed files → keep configs in the home directory /
   env vars, never in `project/.cursor` style paths that share with the repo
+- proposal created ≠ applied — `propose_*` lands reviewable rows only; the
+  apply/discard/undo steps (and every purge) are admin REST verbs — the exact
+  calls live in `docs/rest-recipes.md`
