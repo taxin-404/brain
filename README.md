@@ -100,6 +100,13 @@ live checks (escrow perms, MCP shape, install paths, write/dedupe probe).
 `prompts/install.md` explains the fetched-protocol pattern and the fork-slug
 swap. Tested end-to-end by an agent executing it against a real worker.
 
+### Open donations
+
+`.github/FUNDING.yml` points at GitHub Sponsors for `@taxin-404` — the
+"Sponsor this project" button appears on the repo page once enrollment
+completes there. No third-party links are shipped as placeholders; adding
+ko-fi/PayPal/crypto later is a one-line change.
+
 ### Capture clients — not OpenCode-only
 
 Auto-capture works on any runtime: the bundled OpenCode plugin, a zero-dep

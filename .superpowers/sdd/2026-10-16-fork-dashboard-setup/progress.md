@@ -294,3 +294,11 @@ Open item carried: fresh-account end-to-end test (owner creates account; connect
   Shipping BOTH bumps in one commit → dependabot #4 auto-resolves as
   satisfied. Lesson logged: verdicts need the actual in-suite error, not
   the failure shape; peer ranges are claims, boot behavior is evidence.
+- 2026-10-17l owner wanted "an open donation": shipped .github/FUNDING.yml
+  with github: taxin-404 (Sponsors button — activates on their enrollment
+  at github.com/sponsors; deliberately NO placeholder/third-party links
+  after catching my own scaffold pointing custom at Discussions — a fake
+  donation target is worse than no button). README "Open donations" note +
+  pointer that adding ko-fi/PayPal/crypto later is one line (owner gives
+  handle only; nothing secret ships in this file by design). Gate pair +
+  push.
