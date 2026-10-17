@@ -282,3 +282,15 @@ Open item carried: fresh-account end-to-end test (owner creates account; connect
   charged:0, skills 2/2, capture declined per directive; Stage 7 close-out
   paths-only + re-run note; token masking rule respected (4-char prefix,
   db34…). No secret values printed anywhere in the journey.
+- 2026-10-17k PR sweep 2 + correction of my own diagnosis: only #4 open
+  (root vitest → 5.0.4), unchanged (no rebase yet) with Worker suite
+  failing 40/40. My "wait for upstream compat" verdict was WRONG in detail:
+  installed plugin 1.4.2's peer range ALREADY allows vitest ^5; local repro
+  showed the true failure = pool handshake readAll error inside the plugin
+  (no such file .vitest-cache/<hash> from test-internal.mjs) — fixed
+  upstream in @cloudflare/vitest-plugin 1.4.4. Verified locally: single
+  file then FULL suite on vitest 5.0.4 + plugin 1.4.4 = 298/298 across 42
+  files, tsc clean (workerd gw.test DNS chatter is pre-existing noise).
+  Shipping BOTH bumps in one commit → dependabot #4 auto-resolves as
+  satisfied. Lesson logged: verdicts need the actual in-suite error, not
+  the failure shape; peer ranges are claims, boot behavior is evidence.
