@@ -299,6 +299,11 @@ describe("ai provider config resolution", () => {
     });
   });
 
+  it("strips trailing slashes from the native gateway base", () => {
+    const cfg = chatConfig({ AI_GATEWAY_BASE: "https://gw.test/x/", GEMINI_API_KEY: "g" } as unknown as Env);
+    expect(cfg.base).toBe("https://gw.test/x");
+  });
+
   it("resolves native embeddings by default", () => {
     const cfg = embedConfig({ AI_GATEWAY_BASE: "https://gw.test/x", GEMINI_API_KEY: "g" } as unknown as Env);
     expect(cfg).toEqual({

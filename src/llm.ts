@@ -51,8 +51,9 @@ const GEMINI_PATH_HINT = " (or set AI_BASE_URL for a compatible provider)";
 export const GEMINI_DIRECT_BASE = "https://generativelanguage.googleapis.com";
 
 /** The native Gemini base: the AI Gateway when configured (analytics, caching),
- *  otherwise Google's API directly. */
-const nativeBase = (env: Env): string => env.AI_GATEWAY_BASE || GEMINI_DIRECT_BASE;
+ *  otherwise Google's API directly. Trailing slashes are stripped like the
+ *  compat bases — the path is appended directly. */
+const nativeBase = (env: Env): string => stripTrailingSlashes(env.AI_GATEWAY_BASE || GEMINI_DIRECT_BASE);
 
 /** Resolve the chat path from env. No AI_BASE_URL = the Gemini-native path. */
 export function chatConfig(env: Env): ChatConfig {
