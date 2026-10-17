@@ -59,13 +59,21 @@ headers; same URL and header shape.
 
 ## Auto-capture (the layer that makes memory self-writing)
 
-The worker accepts raw event batches: `POST /v1/events/batch` with the
-**propose** token. OpenCode ships a bundled plugin in this repo (`plugin/`,
-install `cd plugin && npm i`, options `{ endpoint, token }`). For other
-runtimes, point any post-session hook at the same endpoint — and **mirror the
-event schema from `plugin/src/capture.ts`; never invent field names** (the
-server validates strictly). Without capture, agents only store what they
-deliberately propose.
+Ready-made capture clients ship in the repo:
+
+- **OpenCode** — the bundled plugin (`plugin/`, install `cd plugin && npm i`,
+  options `{ endpoint, token }`).
+- **Claude Code** — a zero-dependency SessionEnd hook shim
+  (`clients/claude-code/capture.mjs`); register it in
+  `~/.claude/settings.json` → its README has the exact snippet.
+- **Anything else** — POST bare JSON event arrays to the same endpoint; the
+  shared event contract is in `clients/README.md` and per-endpoint recipes
+  (MCP-free agents, schedulers, CI) are in `docs/rest-recipes.md`.
+
+The server also accepts `POST /v1/events/batch` with the **propose** token
+from any runtime (mirror the schema from `plugin/src/capture.ts`; never
+invent field names — the server validates strictly). Without capture, agents
+only store what they deliberately propose.
 
 ## Common mistakes
 

@@ -57,7 +57,9 @@ changes that **you** review.
 - ✅ OpenCode — capture plugin + MCP recall/propose, live-verified end to end
 - ✅ HTTP clients — Bearer/JSON routes verified with single-shot `curl` against the live worker
 - ✅ Browser — bundled read-only inspector page
-- ⚠️ Other agent platforms not verified yet — the HTTP API is plain Bearer/JSON
+- ✅ Any MCP client — OpenCode, Claude Code, Cursor, Codex, Windsurf (`/mcp` + Bearer)
+- ✅ Claude Code auto-capture — zero-dep SessionEnd hook (`clients/claude-code/`)
+- ✅ Non-MCP agents & schedulers — plain Bearer/JSON (`docs/rest-recipes.md`, verified live)
 
 ### Agent skills — teach any runtime to use the brain
 
@@ -72,6 +74,14 @@ Two installable [Agent Skills](https://agentskills.io) ship in this repo:
 
 Install into your runtimes: `npx skills add taxin-404/brain --skill '*' --global`
 (fork owners: point `npx skills add` at your fork).
+
+### Capture clients — not OpenCode-only
+
+Auto-capture works on any runtime: the bundled OpenCode plugin, a zero-dep
+Claude Code SessionEnd hook (`clients/claude-code/`), and plain Bearer/JSON
+recipes for everything else (`docs/rest-recipes.md` — verified live read,
+write, and dedupe). The shared event contract is documented in
+`clients/README.md`.
 
 ---
 

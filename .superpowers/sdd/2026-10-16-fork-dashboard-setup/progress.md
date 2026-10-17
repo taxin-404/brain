@@ -193,3 +193,28 @@ Open item carried: fresh-account end-to-end test (owner creates account; connect
   OpenCode-only auto-capture plugin remains; universal capture is the HTTP
   endpoint (documented). README "Agent skills" section + install command
   added next commit.
+- 2026-10-17f "not only limited to opencode" (owner plan #2): capture clients
+  for every runtime. shipped: clients/claude-code/ (zero-dep Node ≥18
+  SessionEnd hook shim: stdin hook JSON → JSONL transcript → maps user /
+  assistant text + tool_use to the plugin's payload shapes with source
+  "file", bare-array POST /v1/events/batch, stable cc_<uuid>[_t<i>] ids,
+  65_536 truncation, fail-open contract, flags --transcript/--dry-run/
+  --session-id/--endpoint/--token) + capture.d.mts + install/verify README;
+  clients/README.md (shared event contract pulled from src/ingest.ts:
+  4 sources, 4 actors, batch ≤500, 1 MiB, id regex, id + (session_id, hmac)
+  dedupe); docs/rest-recipes.md (EVERY route from src/index.ts ROUTES with
+  scope labels — read loop, bare-array batch write contract, admin verbs
+  incl. the two-step /v1/confirm/token → purge handshake [fixed after
+  source-reading: first draft wrongly described a scope-mint; the endpoint
+  mints one-time confirm tokens], manual pipeline runs, non-MCP agent loop);
+  test/claude-code-capture.test.ts (7 tests: mapping incl. tool_use id
+  suffix, skip summary/malformed, stable ids, uuid fallback, limit cap,
+  ts normalization, truncateStrings parity). brain-connect skill auto-
+  capture section now lists all three clients; README matrix ⚠️ "other
+  platforms" line replaced by three ✅ lines (MCP clients / claude-code hook /
+  REST recipes). GATE green 298/42 (baseline was 291/41). LIVE VERIFIED on
+  tes1ing with owner-managed escrow creds (values never printed): shim
+  dry-run maps 3 events / skips summary+malformed; real POST → 201 stored 3;
+  replay POST → 0 stored 3 duplicate (id dedupe confirmed); GET recipes →
+  search returns stored data, health-report 200, blocks []. tes1ing now has
+  3 new cc_* events (session cc-verify-1).
