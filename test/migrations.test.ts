@@ -53,6 +53,25 @@ describe("embedded migrations (src/migrations.generated.ts)", () => {
     expect(row?.n).toBe(MIGRATIONS.length);
   });
 
+  it("bootstrap no-ops on a database already migrated by wrangler's apply path", async () => {
+    const { applyD1Migrations } = await import("cloudflare:test");
+    const replayDb = (env as unknown as { REPLAY_DB: D1Database }).REPLAY_DB;
+    await applyD1Migrations(replayDb, dirMigrations); // simulate an existing deployment
+    await ensureSchema(replayDb); // first call on this binding — must skip, not re-apply
+    const row = await replayDb.prepare(`SELECT count(*) AS n FROM d1_migrations`).first<{ n: number }>();
+    expect(row?.n).toBe(MIGRATIONS.length); // no duplicates, no errors
+  });
+
+  it("a failed bootstrap is retried on the next call (memo cleared)", async () => {
+    const brokenDb = (env as unknown as { BROKEN_DB: D1Database }).BROKEN_DB;
+    await brokenDb.prepare(`CREATE TABLE d1_migrations (x INTEGER)`).run(); // hostile hand-made table
+    await expect(ensureSchema(brokenDb)).rejects.toThrow(); // bookkeeping read fails → memo cleared
+    await brokenDb.prepare(`DROP TABLE d1_migrations`).run();
+    await ensureSchema(brokenDb); // must re-run, not replay the memoized rejection
+    const row = await brokenDb.prepare(`SELECT count(*) AS n FROM d1_migrations`).first<{ n: number }>();
+    expect(row?.n).toBe(MIGRATIONS.length);
+  });
+
   it("the main test database was bootstrapped with the standard bookkeeping", async () => {
     const { results } = await env.BRAIN_DB.prepare(`SELECT name FROM d1_migrations ORDER BY id`).all<{
       name: string;

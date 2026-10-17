@@ -9,9 +9,11 @@ export default defineConfig(async () => {
       cloudflareTest({
         wrangler: { configPath: "./wrangler.jsonc" },
         miniflare: {
-          // Migration-free D1 for bootstrap tests (test/migrations.test.ts):
-          // exercises a genuine first boot without touching the migrated DB.
-          d1Databases: ["MIGRATION_DB"],
+          // Migration-free D1s for bootstrap tests (test/migrations.test.ts):
+          // MIGRATION_DB exercises a genuine first boot; REPLAY_DB is
+          // pre-migrated via the plugin to pin the replay no-op; BROKEN_DB
+          // gets a hostile d1_migrations table to pin the memo-clear retry.
+          d1Databases: ["MIGRATION_DB", "REPLAY_DB", "BROKEN_DB"],
           bindings: {
             PAYLOAD_KEK: "dev-kek",
             CONTENT_HMAC_KEY: "dev-hmac",
