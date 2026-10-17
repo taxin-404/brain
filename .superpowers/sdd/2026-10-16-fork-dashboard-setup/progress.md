@@ -105,3 +105,17 @@ Open item carried: fresh-account end-to-end test (owner creates account; connect
   one health smoke). Fresh-account e2e: on a synced fork the retry now expects
   three names, not six; the six-name error already seen belongs to the old
   config.
+- 2026-10-17b, owner directive "set empty envs on deployment, for more easy way":
+  second ease-up of the day. Literal empty secret values rejected (empty KEK =
+  guessable encryption key; empty plain-text vars = 10053 trap later); instead
+  the deploy-time gate is gone and the worker self-reports. `ea4a62d`
+  feat(config): wrangler.jsonc drops `secrets.required`; `missingRequiredSecrets`
+  (env.ts) gates every route with 503 `{"error":"not configured","missing":[…]}`,
+  readable without credentials, until PAYLOAD_KEK + ADMIN_TOKEN are non-empty;
+  crons skip with a log line; AI key is a hint, never a gate; ensureSchema runs
+  only once configured. New `test/config.test.ts` (4 tests) + auth unset-token
+  test reworked (503 at HTTP level, direct `resolveScope` unit pins). Gate:
+  291 green (41 files) + tsc. CLI gain: `--secrets-file` retired — deploy first
+  (green, provisions everything), then `secret put`. Docs `3549979` sweep:
+  README/setup/engineering/SECURITY/spec amendment 8. Next: push, watch
+  CI + build, prod smoke (prod configured ⇒ gate passes, behavior unchanged).
