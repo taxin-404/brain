@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  Personal memory for OpenCode sessions, running on Cloudflare Workers
+  Personal memory for your AI coding agents, running on Cloudflare Workers
 </p>
 
 <p align="center">
@@ -15,6 +15,7 @@
 
 <p align="center">
   <a href="./docs/setup.md">Setup guide</a> |
+  <a href="./docs/rest-recipes.md">REST recipes</a> |
   <a href="./docs/engineering.md">Engineering notes</a> |
   <a href="./CONTRIBUTING.md">Contributing</a> |
   <a href="./SECURITY.md">Security</a>
@@ -24,9 +25,10 @@
 > brain stores sensitive personal memory — run your own deployment, and never point your assistant at someone else's worker.
 > Free-tier AI providers may use non-`restricted` content to improve their products; see [SECURITY.md](./SECURITY.md).
 
-Your OpenCode session flows through a capture plugin (redacts + encrypts),
-a 30-minute sweep distills durable facts with Gemini (or any OpenAI-compatible
-provider), and future sessions recall them via MCP — while the assistant can only *propose* memory
+Your agent's session flows through a capture client (redacts + encrypts —
+OpenCode plugin, Claude Code hook, or plain HTTP), a 30-minute sweep distills
+durable facts with Gemini (or any OpenAI-compatible provider), and future
+sessions recall them via MCP — while the assistant can only *propose* memory
 changes that **you** review.
 
 ---
@@ -36,7 +38,7 @@ changes that **you** review.
 | Feature | Typical AI memory | brain | Notes |
 | --- | --- | --- | --- |
 | Where your data lives | ❌ Vendor cloud | ✅ **Your Cloudflare account** | D1 + R2 + Vectorize, in your account |
-| Session capture | ❌ Manual "remember this" | ✅ **Automatic** | OpenCode plugin captures every session |
+| Session capture | ❌ Manual "remember this" | ✅ **Automatic** | Capture clients per runtime — plugin, hook, or REST |
 | Memory model | ❌ Raw text chunks | ✅ **Distilled facts** | Entities, dedupe, provenance — not a chunk pile |
 | Secret redaction | ❌ | ✅ **Before storage** | Stripped on ingest, before any model sees it |
 | Encryption at rest | ⚠️ Vendor-managed | ✅ **Your keys** | Per-event AES-GCM; the KEK stays yours |
@@ -52,71 +54,6 @@ changes that **you** review.
 
 ---
 
-## Tested with
-
-- ✅ OpenCode — capture plugin + MCP recall/propose, live-verified end to end
-- ✅ HTTP clients — Bearer/JSON routes verified with single-shot `curl` against the live worker
-- ✅ Browser — bundled read-only inspector page
-- ✅ Any MCP client — OpenCode, Claude Code, Cursor, Codex, Windsurf (`/mcp` + Bearer)
-- ✅ Claude Code auto-capture — zero-dep SessionEnd hook (`clients/claude-code/`)
-- ✅ Non-MCP agents & schedulers — plain Bearer/JSON (`docs/rest-recipes.md`, verified live)
-
-### Agent skills — teach any runtime to use the brain
-
-Two installable [Agent Skills](https://agentskills.io) ship in this repo:
-
-- **`skills/brain-memory`** — the judgment layer: what to store now vs rely on
-  auto-capture, evidence-gated corrections, procedures need owner approval,
-  what never gets stored
-- **`skills/brain-connect`** — wiring any MCP client (OpenCode, Claude Code,
-  Cursor, Codex, Windsurf), token scoping (read / propose / admin),
-  auto-capture via `POST /v1/events/batch`
-
-Install into your runtimes: `npx skills add taxin-404/brain --skill '*' --global`
-(fork owners: point `npx skills add` at your fork).
-
-**Set up your machine without reading any of this** — paste this into your
-agent (one requirement: your brain worker is already deployed; the prompt
-stops and routes you to the dashboard otherwise):
-
-```text
-Set up the "brain" memory server for this machine, as directed below. Begin
-by fetching and reading the full setup protocol, then follow it stage by
-stage:
-
-https://raw.githubusercontent.com/taxin-404/brain/master/prompts/setup-local.md
-
-Rules while you work: you are NOT deploying or modifying the server — only
-this machine's local wiring (escrow file, MCP entries, skills, optional
-capture client). Collect my worker URL and tokens by asking me when the
-protocol says so. Never print a secret value — mask tokens as their first 4
-characters plus "…". Run every verification the protocol lists and finish
-with its evidence-suite report plus anything left for me to do by hand.
-```
-
-The agent fetches the current protocol from this repo at run time, asks you
-for the worker URL + tokens, wires everything, and proves each stage with
-live checks (escrow perms, MCP shape, install paths, write/dedupe probe).
-`prompts/install.md` explains the fetched-protocol pattern and the fork-slug
-swap. Tested end-to-end by an agent executing it against a real worker.
-
-### Open donations
-
-`.github/FUNDING.yml` points at GitHub Sponsors for `@taxin-404` — the
-"Sponsor this project" button appears on the repo page once enrollment
-completes there. No third-party links are shipped as placeholders; adding
-ko-fi/PayPal/crypto later is a one-line change.
-
-### Capture clients — not OpenCode-only
-
-Auto-capture works on any runtime: the bundled OpenCode plugin, a zero-dep
-Claude Code SessionEnd hook (`clients/claude-code/`), and plain Bearer/JSON
-recipes for everything else (`docs/rest-recipes.md` — verified live read,
-write, and dedupe). The shared event contract is documented in
-`clients/README.md`.
-
----
-
 ## Visual quick deploy
 
 No terminal, no file editing — a few minutes in your browser.
@@ -127,7 +64,7 @@ No terminal, no file editing — a few minutes in your browser.
 
 3. Pick the missing values straight from the worker: `GET <worker-url>/v1/health-report` answers `503 {"error":"not configured","missing":[…]}` — no credentials needed — until the secrets are set. Add the three required values from [The envs](#the-envs) below under the Worker → **Settings → Variables and Secrets** (the other three there are optional hardening); the next request is live.
 
-4. `GET <worker-url>/v1/health-report` with your `ADMIN_TOKEN` — a fresh install answers with zeros. Then wire up OpenCode (see [docs/setup.md](./docs/setup.md) §7).
+4. `GET <worker-url>/v1/health-report` with your `ADMIN_TOKEN` — a fresh install answers with zeros. Then wire up your assistant (see [docs/setup.md](./docs/setup.md) §7 or the one-paste setup prompt below).
 
 - The default `*.workers.dev` hostname works as-is; add a custom domain under Worker → **Settings → Domains & Routes**.
 - Optional: route Gemini through **your AI Gateway** (analytics, caching) — create one in the dashboard, then add an `AI_GATEWAY_BASE` variable (see the envs table). Unset, calls go straight to Google.
@@ -193,6 +130,64 @@ No format requirements on the random strings — your password manager's generat
 
 ---
 
+## Wire any assistant to the worker
+
+- ✅ OpenCode — capture plugin + MCP recall/propose, live-verified end to end
+- ✅ Any MCP client — Claude Code, Cursor, Codex, Windsurf (`/mcp` + Bearer)
+- ✅ Claude Code auto-capture — zero-dep SessionEnd hook (`clients/claude-code/`)
+- ✅ Non-MCP agents & schedulers — plain Bearer/JSON (`docs/rest-recipes.md`, verified live)
+- ✅ HTTP clients — Bearer/JSON routes verified with single-shot `curl` against the live worker
+- ✅ Browser — bundled read-only inspector page
+
+### Agent skills — teach any runtime to use the brain
+
+Two installable [Agent Skills](https://agentskills.io) ship in this repo:
+
+- **`skills/brain-memory`** — the judgment layer: what to store now vs rely on
+  auto-capture, evidence-gated corrections, procedures need owner approval,
+  what never gets stored
+- **`skills/brain-connect`** — wiring any MCP client (OpenCode, Claude Code,
+  Cursor, Codex, Windsurf), token scoping (read / propose / admin),
+  auto-capture via `POST /v1/events/batch`
+
+Install into your runtimes: `npx skills add taxin-404/brain --skill '*' --global`
+(fork owners: point `npx skills add` at your fork).
+
+**Set up your machine without reading any of this** — paste this into your
+agent (one requirement: your brain worker is already deployed; the prompt
+stops and routes you to the dashboard otherwise):
+
+```text
+Set up the "brain" memory server for this machine, as directed below. Begin
+by fetching and reading the full setup protocol, then follow it stage by
+stage:
+
+https://raw.githubusercontent.com/taxin-404/brain/master/prompts/setup-local.md
+
+Rules while you work: you are NOT deploying or modifying the server — only
+this machine's local wiring (escrow file, MCP entries, skills, optional
+capture client). Collect my worker URL and tokens by asking me when the
+protocol says so. Never print a secret value — mask tokens as their first 4
+characters plus "…". Run every verification the protocol lists and finish
+with its evidence-suite report plus anything left for me to do by hand.
+```
+
+The agent fetches the current protocol from this repo at run time, asks you
+for the worker URL + tokens, wires everything, and proves each stage with
+live checks (escrow perms, MCP shape, install paths, write/dedupe probe).
+`prompts/install.md` explains the fetched-protocol pattern and the fork-slug
+swap. Tested end-to-end by an agent executing it against a real worker.
+
+### Capture clients — not OpenCode-only
+
+Auto-capture works on any runtime: the bundled OpenCode plugin, a zero-dep
+Claude Code SessionEnd hook (`clients/claude-code/`), and plain Bearer/JSON
+recipes for everything else (`docs/rest-recipes.md` — verified live read,
+write, and dedupe). The shared event contract is documented in
+`clients/README.md`.
+
+---
+
 ## FAQ
 
 - **The worker answers `503 not configured` — what now?**
@@ -254,11 +249,22 @@ Full walkthrough with every gotcha: [docs/setup.md](./docs/setup.md).
 
 ---
 
+## Open donations
+
+`.github/FUNDING.yml` points at GitHub Sponsors for `@taxin-404` — the
+"Sponsor this project" button appears on the repo page once enrollment
+completes there. No third-party links are shipped as placeholders; adding
+ko-fi/PayPal/crypto later is a one-line change.
+
+---
+
 ## Documentation
 
-[Setup](./docs/setup.md) · [Engineering notes](./docs/engineering.md) ·
-[Design](./docs/design-v1.2.md) · [Maintenance](./docs/maintenance.md) ·
-[Changelog](./CHANGELOG.md)
+[Setup](./docs/setup.md) · [REST recipes](./docs/rest-recipes.md) ·
+[Engineering notes](./docs/engineering.md) · [Design](./docs/design-v1.2.md) ·
+[Maintenance](./docs/maintenance.md) · [Changelog](./CHANGELOG.md) ·
+[Capture clients](./clients/README.md) · [Setup protocol](./prompts/setup-local.md) ·
+[Agent skills](./skills/brain-memory/SKILL.md)
 
 ## License
 

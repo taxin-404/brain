@@ -319,3 +319,20 @@ Open item carried: fresh-account end-to-end test (owner creates account; connect
   .workers.dev is alive and correct as eval/docs default; note-only finding
   (local .bak files hold old URL — owner hygiene, not repo). No new repo
   code touched; skills only. Gate pair pre-commit + global skill refresh.
+- 2026-10-17n README recheck: audit found zero factual defects but an
+  order problem — 60 lines of agent-skills/setup-prompt/donations sat
+  between the intro and the deploy steps (new users must deploy first);
+  and the narrative was still "OpenCode sessions" though the project
+  outgrew it. Restructure: subtitle + intro broadened to agents-first
+  (capture client: plugin/hook/HTTP); feature-table capture note updated;
+  "Tested with" + "Agent skills" + setup-paste + "Capture clients" moved
+  under a new "## Wire any assistant to the worker" section placed AFTER
+  Visual quick deploy / before FAQ, bullets reordered agent-coverage
+  first; step 4 now "wire up your assistant (§7 or the one-paste prompt
+  below)"; "Open donations" promoted to its own ## near Documentation;
+  Documentation links gained REST recipes · Capture clients · Setup
+  protocol · Agent skills; nav row gained REST recipes. Verified: heading
+  order, all 13 linked assets exist, no consecutive hrs, no duplicate
+  sections, seam prose read clean. No anchor links existed for the
+  renamed headings (checked). Gate pair pre-commit; shell workdir
+  quirk noted (workdir ignored twice — used explicit cd).
