@@ -85,3 +85,13 @@ only store what they deliberately propose.
 - proposal created ≠ applied — `propose_*` lands reviewable rows only; the
   apply/discard/undo steps (and every purge) are admin REST verbs — the exact
   calls live in `docs/rest-recipes.md`
+- **worker domain migration** — the URL *shape differs per site*: MCP entries
+  end in `/mcp`, while the capture plugin's `endpoint` and the hook's
+  `BRAIN_ENDPOINT` take the **bare base**. A global find/replace produces
+  `/mcp/mcp` and silently breaks capture. Also remember: data doesn't follow
+  the rename (re-bind D1/R2/Vectorize or export/restore via
+  `docs/rest-recipes.md`), the escrow file re-installs the old URL at next
+  restore, `.bak` files resurrect it, and stored blocks/procedures may
+  mention the old URL (search, then `propose_correction`). Verify with
+  `GET /v1/health-report` and compare counters against the old brain's last
+  report — `200` on an empty brain is not success.

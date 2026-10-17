@@ -302,3 +302,20 @@ Open item carried: fresh-account end-to-end test (owner creates account; connect
   pointer that adding ko-fi/PayPal/crypto later is one line (owner gives
   handle only; nothing secret ships in this file by design). Gate pair +
   push.
+- 2026-10-17m recheck-for-perfection cycle v3: RED battery (fresh subagents,
+  scenarios never tested before) found two real gaps + one green-luck:
+  (1) pending-block-proposal + new info → baseline agent routed the addition
+  to remember() instead of proposing a MERGED block value + discarding the
+  superseded proposal (the exact UX today's UIST/Sylhet flow lived);
+  (2) baseline only respected over_limit/breaker_open because test context
+  hand-fed capture facts — made the discipline durable. brain-connect got
+  the migration checklist (URL shapes differ per site: /mcp vs bare base —
+  find/replace makes /mcp/mcp; data does not follow rename; escrow +
+  .bak resurrect old URLs; stored blocks may reference old URL → correction;
+  counter-comparison beyond HTTP 200). GREEN re-runs: both scenarios now
+  correct (merge-supersede flow exact incl. both-ids reporting; budget is a
+  stop with health once + capture reliance). GREEN agent's incidental live
+  audit had one FALSE claim: called prod URL "dead" — brain-api.taxin-404
+  .workers.dev is alive and correct as eval/docs default; note-only finding
+  (local .bak files hold old URL — owner hygiene, not repo). No new repo
+  code touched; skills only. Gate pair pre-commit + global skill refresh.

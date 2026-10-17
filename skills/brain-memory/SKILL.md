@@ -43,6 +43,18 @@ blocks first — many "new" preferences are already there. Put the user's
 verbatim quote in the proposal `reason` — that quote is the provenance
 future corrections will cite.
 
+**Pending proposal + new info:** if the owner adds facts related to a block
+that already has a proposal awaiting approval, do NOT route the update into
+`remember` (instant noise). Propose the **merged** value — the pending
+content plus the addition — as a fresh proposal, then discard the superseded
+one by id and tell the owner both ids. Apply-earliest-wins; the merged one
+is the only bid that should exist.
+
+**Budget respect:** a write replying `over_limit` or `breaker_open` is a
+stop. `health_report()` once, tell the owner the counters, rely on
+auto-capture (the content is already an event), and do not retry-hammer —
+limits reset with time, not with pressure.
+
 ## "It's not there" needs proof
 
 Semantic recall can miss events captured minutes ago (the newest batch may
