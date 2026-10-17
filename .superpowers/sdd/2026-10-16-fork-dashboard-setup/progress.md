@@ -119,3 +119,9 @@ Open item carried: fresh-account end-to-end test (owner creates account; connect
   (green, provisions everything), then `secret put`. Docs `3549979` sweep:
   README/setup/engineering/SECURITY/spec amendment 8. Next: push, watch
   CI + build, prod smoke (prod configured ⇒ gate passes, behavior unchanged).
+- 2026-10-17b verified: push `3efac5c..232771f`; CI [39001718757] ✓ (1m17s);
+  build `55f5add0` ✓ — prod shipped the runtime gate and passes it (all secrets
+  configured): health 200, no-auth 401 as before. Fresh-account e2e simplifies:
+  fork sync → Retry → **green with zero secrets** → 503 checklist → set three →
+  200. Owner pending: run that on the fresh account; KEK escrow deletion still
+  held.
