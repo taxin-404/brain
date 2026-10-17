@@ -77,6 +77,23 @@ No terminal, no file editing — a few minutes in your browser.
 - Optional: route Gemini through **your AI Gateway** (analytics, caching) — create one in the dashboard, then add an `AI_GATEWAY_BASE` variable (see the envs table). Unset, calls go straight to Google.
 - Prefer the terminal end to end? → [CLI deploy](#cli-deploy) below.
 
+### If the first build isn't green
+
+- **Read the deploy line.** A typo in the deploy command is the most common
+  failure: the log's last lines show `Executing user deploy command: ...` — it
+  must be exactly `npm run deploy` (fix the field, rebuild/retry).
+- **Zero bindings / no D1 / no R2 — and no build runs at all** means the worker
+  was created through the plain *Hello World* path instead of **Continue with
+  GitHub**: the placeholder deploy carries nothing, and without a repo
+  connect nothing ever remains. Delete that worker and re-create it per
+  step 2 — the git-import is what wires the build commands that run `npm run
+  deploy` (which provisions D1 `brain-db`, R2 `brain-raw` and the Vectorize
+  index).
+- **Log noise ≠ failure.** `gw.test` DNS errors, *Binding VECTORIZE needs to
+ be run remotely*, and ndjson `.text()` warnings are normal test-runner
+  output — the suite is green; the truth is the final
+  `Test Files ... passed` line and whether the deploy step ran.
+
 ### The envs
 
 Everything the worker reads. Three secrets are required (what step 3 sets) — deploys don't block on them; the worker itself lists any that are missing. The optional rows default to something sensible:
