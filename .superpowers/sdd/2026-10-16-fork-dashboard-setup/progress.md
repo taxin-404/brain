@@ -267,3 +267,18 @@ Open item carried: fresh-account end-to-end test (owner creates account; connect
   artifacts prove the full pass — prompt changes needed: none after two
   typo fixes pre-test (heredoc litter + garbled placeholder). README gains
   the setup-paste pointer. Gate pair before commit this time.
+- 2026-10-17j main "install it" prompt (owner: the user-facing paste was
+  missing): prompts/install.md — one short paste that tells the agent to
+  FETCH the canonical setup-local.md from raw.githubusercontent at runtime,
+  then follow it (fetched-protocol pattern: agent always executes the
+  current version; fork owners swap the slug; the paste stays readable).
+  README's agent-setup pointer replaced by the actual copy-paste block.
+  TESTED as the real user journey: fresh subagent given ONLY the main
+  prompt → fetched the protocol from the live raw URL → sandboxed HOME
+  re-run showed idempotency working per stage (escrow byte-identical skip,
+  MCP-shape skip, skills-verified skip) → full evidence suite: health 200
+  (events 321→329, capture traffic visible live), MCP read probe over
+  streamable HTTP OK, write probe smoke-fetche2e-* stored:1 → duplicate
+  charged:0, skills 2/2, capture declined per directive; Stage 7 close-out
+  paths-only + re-run note; token masking rule respected (4-char prefix,
+  db34…). No secret values printed anywhere in the journey.

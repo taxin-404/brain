@@ -75,12 +75,30 @@ Two installable [Agent Skills](https://agentskills.io) ship in this repo:
 Install into your runtimes: `npx skills add taxin-404/brain --skill '*' --global`
 (fork owners: point `npx skills add` at your fork).
 
-**Set up your machine without reading any of this:** paste
-[`prompts/setup-local.md`](prompts/setup-local.md) into your agent — it wires
-escrow, the two MCP entries, the skills, and optional capture into any
-runtime, stage by stage with live verification (tested end-to-end: escrow
-perms, config shape, install locations, write/dedupe probe). Pastes again
-after server changes re-run safely (check-if-done at every stage).
+**Set up your machine without reading any of this** — paste this into your
+agent (one requirement: your brain worker is already deployed; the prompt
+stops and routes you to the dashboard otherwise):
+
+```text
+Set up the "brain" memory server for this machine, as directed below. Begin
+by fetching and reading the full setup protocol, then follow it stage by
+stage:
+
+https://raw.githubusercontent.com/taxin-404/brain/master/prompts/setup-local.md
+
+Rules while you work: you are NOT deploying or modifying the server — only
+this machine's local wiring (escrow file, MCP entries, skills, optional
+capture client). Collect my worker URL and tokens by asking me when the
+protocol says so. Never print a secret value — mask tokens as their first 4
+characters plus "…". Run every verification the protocol lists and finish
+with its evidence-suite report plus anything left for me to do by hand.
+```
+
+The agent fetches the current protocol from this repo at run time, asks you
+for the worker URL + tokens, wires everything, and proves each stage with
+live checks (escrow perms, MCP shape, install paths, write/dedupe probe).
+`prompts/install.md` explains the fetched-protocol pattern and the fork-slug
+swap. Tested end-to-end by an agent executing it against a real worker.
 
 ### Capture clients — not OpenCode-only
 
