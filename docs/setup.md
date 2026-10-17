@@ -164,7 +164,7 @@ npm ci && npm test && npx tsc --noEmit    # local gate — green before any depl
 npm run deploy                            # = ensure-vectorize + wrangler deploy --env=""
 ```
 
-The first CLI deploy stops with *Missing required secrets* until §3 has run —
+The first CLI deploy stops with *"The following required secrets have not been set"* until §3 has run —
 that is `secrets.required` working as intended; re-run it after setting the
 secrets. Every later deploy also re-checks (and provisions, when missing) the
 Vectorize index before uploading.
@@ -219,7 +219,7 @@ exactly these values:
 | Protect with Cloudflare Access | leave OFF — the worker authenticates with its own tokens. |
 
 Click **Deploy**. If §3 has not run yet, the first build fails loudly at the
-deploy step with *Missing required secrets* — by design (`secrets.required`):
+deploy step with *"The following required secrets have not been set"* — by design (`secrets.required`):
 set the six secrets, then re-run the build. Every later push to `master` runs
 the same pipeline.
 
@@ -336,9 +336,9 @@ curl -s -X POST https://<worker>/v1/proposals/<id>/apply \
 | Symptom | Likely cause | Fix |
 | --- | --- | --- |
 | Every authenticated route 401s | a secret is missing/different on the worker | `npx wrangler secret list`; re-put; deploys should have failed via `secrets.required` |
-| First deploy stops with "Missing required secrets" | secrets not set yet — by design | add the six (README step 3 / §3), then **Retry deployment** |
+| First deploy stops with "The following required secrets have not been set" | secrets not set yet — by design | add the six (README step 3 / §3), then **Retry deployment** |
 | Deploy fails with error `10159` (Vectorize) | build token could not create/see `brain-memory` | create it in the dashboard (768, cosine + metadata indexes) and retry |
-| `503 server not ready: schema bootstrap failed` | the first-request schema bootstrap hit a D1 error | check `wrangler tail`; it retries on the next request — a persistent failure means D1 is unreachable |
+| `503 server not ready: schema bootstrap failed` | the first-request schema bootstrap hit a D1 error | check `wrangler tail` — the log names the failing migration; it retries on the next request. Persistent failure on a hand-made schema: reconcile with `npx wrangler d1 migrations apply brain-db --remote` |
 | Worker runs but D1/R2 calls fail, bindings undefined | deployed with `--env prod` | redeploy with `npm run deploy` |
 | Push builds stop triggering | GitHub App lost repo access | re-connect the Workers and Pages app (docs/engineering.md §"Deploy & CI") |
 | `403` with "blocked access based on your browser's signature" | scripted User-Agent (e.g. python-urllib) hits the edge bot filter | probe with `curl` or a normal UA |

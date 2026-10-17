@@ -8,10 +8,12 @@ MCP_READ_TOKEN="dev-read"
 MCP_PROPOSE_TOKEN="dev-propose"
 ADMIN_TOKEN="dev-admin"
 GEMINI_API_KEY="dev-gemini"
-AI_GATEWAY_BASE="https://gw.test/google-ai-studio"
+
+# Optional — route Gemini through an AI Gateway (unset = straight to Google):
+#AI_GATEWAY_BASE="https://gateway.ai.cloudflare.com/v1/<account_id>/<gateway>/google-ai-studio"
 
 # Optional — run chat and/or embeddings on any OpenAI-compatible provider.
-# Unset = Gemini via the gateway above. See README → The envs.
+# Unset = Gemini (direct, or via the gateway above). See README → The envs.
 #AI_BASE_URL="https://api.openai.com/v1"
 #AI_API_KEY="sk-..."              # falls back to GEMINI_API_KEY; keyless works
 #AI_MODEL="gpt-4.1-mini"          # required when AI_BASE_URL is set

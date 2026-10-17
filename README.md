@@ -67,9 +67,9 @@ No terminal, no file editing — a few minutes in your browser.
 
 1. **Fork** this repository, then grab a free [Google AI Studio](https://aistudio.google.com) API key.
 
-2. In **Workers & Pages → Create → Continue with GitHub**, select your fork and set: name `brain-api` (the dashboard pre-fills the repo name `brain` — change it to match `wrangler.jsonc`), build command `npm ci && npm test`, deploy command `npm run deploy`, and **turn OFF preview builds**. Click **Deploy**. The deploy provisions everything else into *your* account: D1 `brain-db`, R2 `brain-raw`, the Vectorize index `brain-memory` — and the database schema applies on the first request.
+2. In **Workers & Pages → Create → Continue with GitHub**, select your fork and set: name `brain-api` (the dashboard pre-fills the repo name `brain` — change it to match `wrangler.jsonc`), build command `npm ci && npm test`, deploy command `npm run deploy`, and **turn OFF preview builds**. Click **Deploy**. The first run creates the Vectorize index `brain-memory`, then stops on the missing secrets (step 3 — wrangler can't upload a worker before they exist). The successful retry provisions D1 `brain-db` and R2 `brain-raw` into *your* account, and the database schema applies on the first request.
 
-3. The first deploy stops with *Missing required secrets* — on purpose. Add the six values from [The envs](#the-envs) below under the Worker → **Settings → Variables and Secrets**, then hit **Retry deployment**.
+3. The first deploy stops with *"The following required secrets have not been set: …"* — on purpose. Add the six values from [The envs](#the-envs) below under the Worker → **Settings → Variables and Secrets**, then hit **Retry deployment**.
 
 4. `GET <worker-url>/v1/health-report` with your `ADMIN_TOKEN` — a fresh install answers with zeros. Then wire up OpenCode (see [docs/setup.md](./docs/setup.md) §7).
 
@@ -120,7 +120,7 @@ No format requirements on the random strings — your password manager's generat
 
 ## FAQ
 
-- **Why did my first deploy fail with "Missing required secrets"?**
+- **Why did my first deploy fail with "The following required secrets have not been set"?**
   On purpose: `secrets.required` keeps a half-configured worker from serving traffic. Add the six secrets (step 3), then **Retry deployment**.
 
 - **The build failed at the deploy step with error 10159 — what now?**
@@ -163,14 +163,15 @@ cd brain
 npm ci
 npx wrangler login
 
-# 1. first deploy — provisions D1 `brain-db`, R2 `brain-raw` and Vectorize
-#    `brain-memory` in your account, then fails loudly on the missing secrets
+# 1. first deploy — creates the Vectorize index, then stops with
+#    "The following required secrets have not been set" (by design)
 npm run deploy
 
 # 2. secrets — generate, escrow, upload (exact snippet in docs/setup.md §3)
 npx wrangler secret put PAYLOAD_KEK   # ...and the five others
 
-# 3. deploy again — the worker goes live; the schema applies on the first request
+# 3. deploy again — provisions D1 brain-db + R2 brain-raw, uploads the worker;
+#    the schema applies on the first request
 npm run deploy
 ```
 

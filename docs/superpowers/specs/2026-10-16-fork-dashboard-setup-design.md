@@ -32,7 +32,7 @@ up; prod resources verified untouched. Full detail:
   CURRENT_TIMESTAMP NOT NULL)`; rows exactly `0001_events.sql` …
   `0006_extractions.sql` — the same table/names `readD1Migrations` produces.
 - **`secrets.required` is deploy-blocking** in wrangler 4.151 (dist strings:
-  "Missing required secrets: …" before first deploy / during upload or deploy).
+  "The following required secrets have not been set: …" before first deploy / during upload or deploy).
 
 ## Decisions
 
@@ -49,7 +49,7 @@ up; prod resources verified untouched. Full detail:
   the var with a one-off `keep_vars:false` deploy, then `secret put` succeeded.
   The direct-Google fallback covered the (short) window.
 - Keep `secrets.required` and the `--env=""` deploy semantics. The red first
-  build (`Missing required secrets: …`) is the deliberate, documented fork step:
+  build (`The following required secrets have not been set: …`) is the deliberate, documented fork step:
   paste the six secrets in **Settings → Variables and Secrets**, click
   **Retry deployment**.
 

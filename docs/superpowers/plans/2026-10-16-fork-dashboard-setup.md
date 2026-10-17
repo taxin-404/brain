@@ -223,7 +223,7 @@ Input classes and failure modes the tests do not exercise directly:
 - The prod config switch: id-less D1 re-link must show `(inherited)`; the
   gateway var → secret move must not change the resolved base.
 - Docs accuracy: every dashboard step must match wrangler 4.151 strings
-  ("Missing required secrets", Settings → Variables and Secrets, Retry
+  ("The following required secrets have not been set", Settings → Variables and Secrets, Retry
   deployment).
 
 ## Fresh-account checklist (owner, after this ships)
@@ -234,7 +234,7 @@ Input classes and failure modes the tests do not exercise directly:
 3. Dashboard → Workers & Pages → Create → Continue with GitHub → pick the
    fork; name `brain-api`; build `npm ci && npm test`; deploy `npm run
    deploy`; previews OFF.
-4. First build goes red with `Missing required secrets: …` — expected.
+4. First build goes red with `The following required secrets have not been set: …` — expected.
    Settings → Variables and Secrets → add the six (`PAYLOAD_KEK`,
    `CONTENT_HMAC_KEY`, `MCP_READ_TOKEN`, `MCP_PROPOSE_TOKEN`, `ADMIN_TOKEN`,
    `GEMINI_API_KEY`) → Retry deployment.
