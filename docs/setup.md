@@ -118,6 +118,21 @@ there are no format requirements (the KEK is SHA-256-stretched before use).
 Dashboard-first version of this list: README → *Visual quick deploy* → *The
 envs*.
 
+**Store before you paste — some of these get reused by your AI client.** The
+dashboard shows a secret's value exactly once, so write every generated value
+into your escrow file (or password manager) *before* pasting it, and keep the
+file. Two kinds of second life:
+
+- **Credentials your AI reuses:** `ADMIN_TOKEN`, and once you add them
+  `MCP_READ_TOKEN` / `MCP_PROPOSE_TOKEN`, are pasted again *outside* the
+  dashboard — the §7 opencode plugin + MCP `Authorization` headers use the exact
+  same values (minimal mode: `ADMIN_TOKEN` in all three places). Losing them
+  just means regenerating + re-pasting on both sides.
+- **Worker-side only:** `PAYLOAD_KEK`, `CONTENT_HMAC_KEY`, `GEMINI_API_KEY`,
+  `GITHUB_TOKEN` never go into any client config. Their escrow copy exists purely
+  so a lost dashboard secret never means a lost brain — backup restore decrypts
+  with the KEK alone.
+
 **Optional: non-Google AI provider.** Chat (extraction, reasoning) and
 embeddings can each run on any OpenAI-compatible API — set `AI_BASE_URL` +
 `AI_MODEL` (+ `AI_API_KEY`; keyless works) for chat, and `AI_EMBED_BASE_URL` /

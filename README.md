@@ -94,6 +94,8 @@ Everything the worker reads. Three secrets are required (what step 3 sets) — d
 
 No format requirements on the random strings — your password manager's generator is enough (**make every value different**). Minimal setup is the three required values; every optional secret you add buys one property (derived signing vs. a dedicated key; shared admin vs. scoped client tokens). The same list, with descriptions, ships in `package.json` (`cloudflare.bindings`) — so Cloudflare setup flows know what to ask for.
 
+**Store every value before you paste it** — the dashboard shows a secret's content exactly once, and two of them have a second life outside it: `ADMIN_TOKEN` (and, later, the optional `MCP_*` tokens) are the credentials your AI client pastes into its own config in step 4 / [docs/setup.md](./docs/setup.md) §7. The crypto keys (`PAYLOAD_KEK`, `CONTENT_HMAC_KEY`) and provider keys (`GEMINI_API_KEY`, `GITHUB_TOKEN`) stay worker-side — their escrow copy exists purely for disaster recovery: a fresh install restores from a backup with the KEK alone.
+
 **Optional — run on any AI provider.** Chat (extraction and reasoning) and embeddings can each run on any OpenAI-compatible API — configuration only, no code:
 
 | Name | Set where | Value |
