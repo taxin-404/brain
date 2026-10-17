@@ -218,3 +218,21 @@ Open item carried: fresh-account end-to-end test (owner creates account; connect
   replay POST → 0 stored 3 duplicate (id dedupe confirmed); GET recipes →
   search returns stored data, health-report 200, blocks []. tes1ing now has
   3 new cc_* events (session cc-verify-1).
+- 2026-10-17g "make our skills more perfect": brain-memory upgraded from
+  living evidence of today's failures (user wanted faster/perfecter skills).
+  Four gaps closed, each observed live this session: (1) valid block keys
+  now listed (identity/preferences/active_projects/infrastructure/
+  constraints/objective — invalid key is 400; agents used to guess);
+  (2) personal/family data defaults to the event layer, block only on
+  explicit owner ask; (3) "it's not there needs proof" — newest events may
+  outpace semantic indexing (recall("brother") missed a minute-old capture),
+  verify via health-report rising events + flat warn/breaker before
+  declaring loss; (4) urgency protocol — owners who say "without delay" get
+  proposal id + exact value + the one-line admin apply, and agents may run
+  apply ONLY on explicit owner instruction with a legitimately held admin
+  credential, verified by GET /v1/blocks re-read (the path that unblocked
+  today's identity apply). Verbatim-quote-in-reason provenance rule added.
+  No design change — tiering intact (blocks/procedures still owner-only).
+  RED was real (this session's misses); GREEN subagent re-run handled all
+  three scenarios correctly (dedupe-first, no double-store of "i have a
+  brother", health-checked non-loss). Gate + push follow.
