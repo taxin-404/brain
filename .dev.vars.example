@@ -2,6 +2,9 @@
 #
 # Copy to `.dev.vars` (gitignored) — these are intentionally fake, public
 # values; production secrets go in via `wrangler secret put` (see docs/setup.md).
+# Only PAYLOAD_KEK, ADMIN_TOKEN and GEMINI_API_KEY are required in production —
+# the scoped/decoupled values below are shown so local dev exercises the
+# full-scope paths (README → The envs).
 PAYLOAD_KEK="dev-kek"
 CONTENT_HMAC_KEY="dev-hmac"
 MCP_READ_TOKEN="dev-read"

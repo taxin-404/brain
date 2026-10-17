@@ -296,12 +296,20 @@ live.
   **CLI** account differs — wrangler's `workerExists=false` branch throws before
   upload (only the Vectorize index exists) and directs to `--secrets-file`.
 - **Secrets survive deploys** (worker-level, never touched by a deploy):
-  `PAYLOAD_KEK`, `CONTENT_HMAC_KEY`, `MCP_READ_TOKEN`, `MCP_PROPOSE_TOKEN`,
-  `ADMIN_TOKEN`, `GEMINI_API_KEY` (+ `AI_GATEWAY_BASE`). `secrets.required` in
-  `wrangler.jsonc` makes a deploy *fail loudly* if any of the six required
-  secrets is missing — the fork flow leans on this (red first build → paste six
-  secrets → **Retry deployment**). Symptom of one deleted later: every
-  authenticated route 401s.
+  required are `PAYLOAD_KEK`, `ADMIN_TOKEN`, `GEMINI_API_KEY`; optional with
+  working defaults are `CONTENT_HMAC_KEY`, `MCP_READ_TOKEN`, `MCP_PROPOSE_TOKEN`
+  (+ `AI_GATEWAY_BASE`). `secrets.required` in `wrangler.jsonc` makes a deploy
+  *fail loudly* if a required secret is missing — the fork flow leans on this
+  (red first build → paste three values → **Retry deployment**). Symptom of one
+  deleted later: every authenticated route 401s.
+- **Default-minimal secrets** (2026-10-17): unset `CONTENT_HMAC_KEY` ⇒ the
+  signing secret is derived from `PAYLOAD_KEK` (`contentSigningSecret`,
+  domain-separated HMAC — deterministic, so content keys/export links stay
+  stable). Unset `MCP_*` tokens ⇒ the admin token is the only credential
+  (unset values can never match — `resolveScope` non-empty guard; that guard is
+  load-bearing now, not just defense in depth). Setting `CONTENT_HMAC_KEY`
+  later changes content keys and invalidates outstanding export links. Prod
+  sets all six, so prod behavior is unchanged.
 - **`keep_vars: true` protects plain-text vars** that are not in
   `wrangler.jsonc` — including vars the config *used to* set: removing a var
   from the config does **not** remove it from the worker (observed live

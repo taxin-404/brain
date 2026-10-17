@@ -46,4 +46,6 @@ Notes:
   succeed with NEW (idempotent recovery).
 - `CONTENT_HMAC_KEY` rotation is separate: HMACs exist only for dedupe/integrity inside
   a session; a rotation invalidates historical dedupe hits (acceptable — dedupe is
-  best-effort across sessions).
+  best-effort across sessions). If `CONTENT_HMAC_KEY` is unset (the minimal setup —
+  signing derives from the KEK), KEK rotation also changes content keys and
+  invalidates outstanding export links; the same applies to the first KEK escrow.

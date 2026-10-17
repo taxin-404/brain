@@ -55,8 +55,8 @@ up; prod resources verified untouched. Full detail:
   The direct-Google fallback covered the (short) window.
 - Keep `secrets.required` and the `--env=""` deploy semantics. The red first
   build (`The following required secrets have not been set: …`) is the deliberate, documented fork step:
-  paste the six secrets in **Settings → Variables and Secrets**, click
-  **Retry deployment**.
+  paste the required secrets in **Settings → Variables and Secrets** (three by
+  default since amendment 7), click **Retry deployment**.
 
 ### 2. Runtime schema bootstrap — `src/bootstrap.ts`
 
@@ -119,17 +119,17 @@ up; prod resources verified untouched. Full detail:
 
 `resolveScope` compares against `Bearer ${env.TOKEN}` — with a token unset the
 literal string `Bearer undefined` authenticates as ADMIN. Guard: compare only
-when the env value is non-empty. (Defense in depth; `secrets.required` already
-blocks tokenless deploys, but local dev, drills, and any future relaxation must
-not create an admin.)
+when the env value is non-empty. (Now load-bearing, not just defense in depth:
+the scoped tokens are optional since amendment 7, so an unset token must never
+match — otherwise `Bearer undefined` would be an admin.)
 
 ### 6. Docs — the fork funnel
 
 - README "Visual quick deploy" → dashboard-only steps: fork → Workers →
   connect repo (name `brain-api`, build `npm ci && npm test`, deploy
-  `npm run deploy`, previews OFF) → red first build → paste six secrets →
-  Retry deployment → `GET <worker>/v1/health-report` returns zeros → wire
-  OpenCode (docs/setup.md §7).
+  `npm run deploy`, previews OFF) → red first build → paste the required
+  secrets (three by default) → Retry deployment → `GET <worker>/v1/health-report`
+  returns zeros → wire OpenCode (docs/setup.md §7).
 - New "Removing / starting over" section: deleting the Worker is safe (D1/R2
   survive — proven); full wipe = delete worker + D1 + R2 + Vectorize + the
   GitHub connection in the dashboard. FAQ updated (red first build, 401s,
@@ -138,6 +138,30 @@ not create an admin.)
   command, runtime bootstrap, migrations workflow); `CONTRIBUTING.md`
   (regenerate after editing `migrations/`); `package.json`
   `cloudflare.bindings` descriptions.
+
+### 7. Default-minimal secrets (amendment, 2026-10-17)
+
+Owner directive: fewer envs to remember — the fork default must be the smallest
+set that still works, with the rest available as opt-in hardening.
+
+- `secrets.required` → `PAYLOAD_KEK`, `ADMIN_TOKEN`, `GEMINI_API_KEY` (down
+  from six). The red first build names three values; the other three are
+  optional (dashboard + `.secrets/prod.env` only when wanted).
+- `CONTENT_HMAC_KEY` unset ⇒ signing secret derived from the KEK
+  (`contentSigningSecret`: HMAC-SHA256(KEK, `"brain/content-hmac/v1"`) —
+  domain-separated and deterministic, so per-event content keys and export
+  links stay stable). Set ⇒ explicit value wins. Setting it *later* changes
+  content keys and invalidates outstanding export links (documented).
+- `MCP_READ_TOKEN` / `MCP_PROPOSE_TOKEN` unset ⇒ the admin token is the only
+  credential (decision 5's non-empty guard makes it safe; admin scope covers
+  both needs). Client configs use `ADMIN_TOKEN` in minimal mode (setup §7).
+- Prod keeps all six set → behavior byte-identical; the required-list change is
+  deploy-time only.
+- Docs/tests: README (steps/envs/FAQ/CLI), setup.md (§3 table + snippet:
+  required three generated, optional three commented; §4/§6/§7/§10),
+  engineering.md, package.json bindings, key-rotation.md note; tests — crypto
+  derivation unit (RED→GREEN), minimal-env auth pin, ingest dedupe under the
+  derived secret, export fixture re-derived through the helper.
 
 ## Verification
 
@@ -154,8 +178,8 @@ not create an admin.)
    `GET /v1/health-report` + `GET /v1/search` smoke; AI wiring still native via
    the gateway.
 5. Fresh-account end-to-end (owner action): new free account → fork connect →
-   red build → six secrets → Retry → zeros health; pin the dashboard
-   delete-flow wording; document.
+   red build → required secrets (three by default) → Retry → zeros health; pin
+   the dashboard delete-flow wording; document.
 
 ## Risks / rollback
 

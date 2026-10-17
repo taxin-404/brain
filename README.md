@@ -69,7 +69,7 @@ No terminal, no file editing — a few minutes in your browser.
 
 2. In **Workers & Pages → Create → Continue with GitHub**, select your fork and set: name `brain-api` (the dashboard pre-fills the repo name `brain` — change it to match `wrangler.jsonc`), build command `npm ci && npm test`, deploy command `npm run deploy`, and **turn OFF preview builds**. Click **Deploy**. The first run provisions D1 `brain-db`, R2 `brain-raw` and the Vectorize index `brain-memory` into *your* account, then stops on the missing secrets (step 3 — by design; nothing is lost, the retry reuses it all). The database schema applies on the first request.
 
-3. The first deploy stops with *"The following required secrets have not been set: …"* — on purpose. Add the six values from [The envs](#the-envs) below under the Worker → **Settings → Variables and Secrets**, then hit **Retry deployment**.
+3. The first deploy stops with *"The following required secrets have not been set: …"* — on purpose. Add the **three required values** from [The envs](#the-envs) below under the Worker → **Settings → Variables and Secrets** (the other three secrets there are optional hardening), then hit **Retry deployment**.
 
 4. `GET <worker-url>/v1/health-report` with your `ADMIN_TOKEN` — a fresh install answers with zeros. Then wire up OpenCode (see [docs/setup.md](./docs/setup.md) §7).
 
@@ -79,20 +79,20 @@ No terminal, no file editing — a few minutes in your browser.
 
 ### The envs
 
-Everything the worker reads — the six secrets are what step 3 sets; the rest is optional:
+Everything the worker reads. Three secrets are required (what step 3 sets) — the optional rows default to something sensible:
 
 | Name | Set where | Value |
 | --- | --- | --- |
 | `PAYLOAD_KEK` | dashboard secret | any 32+ char random string — **escrow it; if lost, encrypted data is unrecoverable** |
-| `CONTENT_HMAC_KEY` | dashboard secret | any 32+ char random string |
-| `MCP_READ_TOKEN` | dashboard secret | any 32+ char random string — read scope |
-| `MCP_PROPOSE_TOKEN` | dashboard secret | any 32+ char random string — write scope; must differ from the read token |
+| `CONTENT_HMAC_KEY` | dashboard secret, *optional* | any 32+ char random string — unset, signing is derived from `PAYLOAD_KEK`; set to decouple the two |
+| `MCP_READ_TOKEN` | dashboard secret, *optional* | any 32+ char random string — read scope; unset, reads use `ADMIN_TOKEN` |
+| `MCP_PROPOSE_TOKEN` | dashboard secret, *optional* | any 32+ char random string — write scope; unset, writes use `ADMIN_TOKEN`; must differ from the read token when set |
 | `ADMIN_TOKEN` | dashboard secret | any 32+ char random string — admin routes |
 | `GEMINI_API_KEY` | dashboard secret | a free key from [Google AI Studio](https://aistudio.google.com) |
 | `AI_GATEWAY_BASE` | dashboard variable, *optional* | `https://gateway.ai.cloudflare.com/v1/<account_id>/brain/google-ai-studio` — routes Gemini through your AI Gateway; unset = straight to Google |
 | `GITHUB_TOKEN` | dashboard secret, *optional* | GitHub token for the activity connector; raises rate limits |
 
-No format requirements on the random strings — your password manager's generator is enough (**make every value different**). The same list, with descriptions, ships in `package.json` (`cloudflare.bindings`) — so Cloudflare setup flows know what to ask for.
+No format requirements on the random strings — your password manager's generator is enough (**make every value different**). Minimal setup is the three required values; every optional secret you add buys one property (derived signing vs. a dedicated key; shared admin vs. scoped client tokens). The same list, with descriptions, ships in `package.json` (`cloudflare.bindings`) — so Cloudflare setup flows know what to ask for.
 
 **Optional — run on any AI provider.** Chat (extraction and reasoning) and embeddings can each run on any OpenAI-compatible API — configuration only, no code:
 
@@ -121,7 +121,7 @@ No format requirements on the random strings — your password manager's generat
 ## FAQ
 
 - **Why did my first deploy fail with "The following required secrets have not been set"?**
-  On purpose: `secrets.required` keeps a half-configured worker from serving traffic. Add the six secrets (step 3), then **Retry deployment**.
+  On purpose: `secrets.required` keeps a half-configured worker from serving traffic. Add the required secrets (step 3 — three values by default), then **Retry deployment**.
 
 - **The build failed at the deploy step with error 10159 — what now?**
   Your build token could not create the `brain-memory` index. Create it in the dashboard — Vectorize → **Create index** → `brain-memory`, 768 dims, cosine, metadata indexes `type`/`status`/`sensitivity` (string) — then **Retry deployment**.
@@ -130,7 +130,7 @@ No format requirements on the random strings — your password manager's generat
   Facts appear after the next 30-minute sweep, and only sessions run *after* wiring the plugin are captured. Check capture health in `/tmp/opencode/brain-capture-diag.log` (`ingest_ok`); the [setup guide](./docs/setup.md) has a full verification checklist.
 
 - **Every route answers 401 — what now?**
-  Almost always a token mismatch: `MCP_READ_TOKEN`, `MCP_PROPOSE_TOKEN` and `ADMIN_TOKEN` must match what your clients send. Re-copy them under Worker → Settings → Variables and Secrets.
+  Almost always a token mismatch: the worker only accepts the tokens that are actually set — with no `MCP_*` tokens, clients must send `ADMIN_TOKEN`. Re-copy the values under Worker → Settings → Variables and Secrets.
 
 - **Is my content sent to an AI provider?**
   Yes — non-`restricted` excerpts go to Gemini with *your* key (through *your* AI Gateway when configured), for fact extraction and embeddings. Content marked `restricted`, and anything the redactor strips, never leaves the system. Details in [SECURITY.md](./SECURITY.md).
@@ -165,7 +165,7 @@ npx wrangler login
 
 # 1. secrets — generate + escrow (exact snippet in docs/setup.md §3).
 #    Fresh account: there is no worker yet, so `secret put` is rejected —
-#    the first deploy carries the six via --secrets-file (wrangler's own advice):
+#    the first deploy carries them via --secrets-file (wrangler's own advice):
 node scripts/ensure-vectorize.mjs
 npx wrangler deploy --env="" --secrets-file .secrets/prod.env
 

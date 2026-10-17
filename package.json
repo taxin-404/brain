@@ -9,13 +9,13 @@
         "description": "Random string (32+ chars). Wraps per-event data keys — payload encryption at rest. Escrow it: if lost, encrypted data is unrecoverable."
       },
       "CONTENT_HMAC_KEY": {
-        "description": "Random string (32+ chars). Signs export links and confirm tokens."
+        "description": "Optional. Random string (32+ chars). Signs export links and confirm tokens. Unset = signing key derived from PAYLOAD_KEK; set to decouple the two. Adding it after events exist changes content keys and invalidates outstanding export links."
       },
       "MCP_READ_TOKEN": {
-        "description": "Random string (32+ chars). Read scope — REST reads + the recall MCP connection."
+        "description": "Optional. Random string (32+ chars). Read scope — REST reads + the recall MCP connection. Unset = ADMIN_TOKEN is the read credential."
       },
       "MCP_PROPOSE_TOKEN": {
-        "description": "Random string (32+ chars). Propose scope — capture-plugin ingest + write MCP tools. Must differ from the read token."
+        "description": "Optional. Random string (32+ chars). Propose scope — capture-plugin ingest + write MCP tools. Unset = ADMIN_TOKEN writes. When set, must differ from the read token."
       },
       "ADMIN_TOKEN": {
         "description": "Random string (32+ chars). Owner key — apply/discard, exports, purge, manual kicks."

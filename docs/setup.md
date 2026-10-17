@@ -99,12 +99,19 @@ npx wrangler d1 migrations apply brain-db --remote    # optional; identical resu
 | Secret | Purpose | Generate with |
 | --- | --- | --- |
 | `PAYLOAD_KEK` | wraps per-event data keys (payload encryption at rest) | `openssl rand -base64 32` |
-| `CONTENT_HMAC_KEY` | signs export links / confirm tokens | `openssl rand -hex 32` |
-| `MCP_READ_TOKEN` | read scope — REST reads + the `brain` MCP connection | `openssl rand -hex 32` |
-| `MCP_PROPOSE_TOKEN` | propose scope — capture-plugin ingest + `brain-propose` MCP writes | `openssl rand -hex 32` |
-| `ADMIN_TOKEN` | owner key — apply/discard, exports, purge, manual kicks | `openssl rand -hex 32` |
+| `ADMIN_TOKEN` | owner key — apply/discard, exports, purge, manual kicks; also the fallback credential for both scopes below | `openssl rand -hex 32` |
 | `GEMINI_API_KEY` | Google AI Studio key (sent through your AI Gateway when `AI_GATEWAY_BASE` is set) | AI Studio console |
+| `CONTENT_HMAC_KEY` | *optional* — signs export links / confirm tokens; unset, signing derives from `PAYLOAD_KEK` | `openssl rand -hex 32` |
+| `MCP_READ_TOKEN` | *optional* — read scope (REST reads + the `brain` MCP connection); unset, `ADMIN_TOKEN` is the read credential | `openssl rand -hex 32` |
+| `MCP_PROPOSE_TOKEN` | *optional* — propose scope (capture-plugin ingest + `brain-propose` MCP writes); unset, `ADMIN_TOKEN` writes | `openssl rand -hex 32` |
 | `GITHUB_TOKEN` | *optional* — GitHub activity connector (raises rate limits) | GitHub → Developer settings → PAT |
+
+The required set is three: `PAYLOAD_KEK`, `ADMIN_TOKEN`, `GEMINI_API_KEY`. The
+optional rows have working defaults — add them whenever you want key separation
+and scoped clients. One ordering note: setting `CONTENT_HMAC_KEY` *after* events
+exist changes content keys (dedupe/integrity) and invalidates outstanding export
+links, so add it (if you want it) before real capture starts; the two tokens can
+be added at any time.
 
 The `openssl` generators above are convenience: any long random string works —
 there are no format requirements (the KEK is SHA-256-stretched before use).
@@ -122,26 +129,27 @@ re-embeds stored facts in the background over the next sweeps. Full table:
 README → *The envs*.
 
 ```bash
-# 1. Generate every value into .secrets/prod.env (gitignored via .secrets/).
+# 1. Generate the required values into .secrets/prod.env (gitignored via .secrets/).
 #    One-time step: skipped if the file already exists — re-running would
 #    regenerate PAYLOAD_KEK and orphan existing payloads (rotation: docs/key-rotation.md).
 if [ -e .secrets/prod.env ]; then
   echo "NOTE: .secrets/prod.env already exists — generation skipped"
 else
   umask 077; mkdir -p .secrets
-  echo "PAYLOAD_KEK=$(openssl rand -base64 32)"   >> .secrets/prod.env
-  echo "CONTENT_HMAC_KEY=$(openssl rand -hex 32)" >> .secrets/prod.env
-  for s in MCP_READ_TOKEN MCP_PROPOSE_TOKEN ADMIN_TOKEN; do
-    echo "$s=$(openssl rand -hex 32)" >> .secrets/prod.env
-  done
+  echo "PAYLOAD_KEK=$(openssl rand -base64 32)" >> .secrets/prod.env
+  echo "ADMIN_TOKEN=$(openssl rand -hex 32)"    >> .secrets/prod.env
   echo "GEMINI_API_KEY=" >> .secrets/prod.env   # edit the file: paste the AI Studio key after the =
+  # Optional hardening — uncomment any line before the first deploy to add it:
+  #echo "CONTENT_HMAC_KEY=$(openssl rand -hex 32)"  >> .secrets/prod.env  # signing key decoupled from the KEK
+  #echo "MCP_READ_TOKEN=$(openssl rand -hex 32)"    >> .secrets/prod.env  # read-only client token
+  #echo "MCP_PROPOSE_TOKEN=$(openssl rand -hex 32)" >> .secrets/prod.env  # write-scoped client token
   # (Nothing to add here for a non-Google provider: the optional AI_* values
   #  are set in the dashboard — see "Optional: non-Google AI provider" above.)
 fi
 
 # 2. Escrow the file in your password manager FIRST (see below) — then get the
-#    six onto the worker. The route depends on whether the worker exists yet;
-#    see the two variants right below this block.
+#    secrets onto the worker. The route depends on whether the worker exists
+#    yet; see the two variants right below this block.
 ```
 
 **Fresh account — no worker yet.** `wrangler secret put` needs an existing
@@ -152,13 +160,22 @@ node scripts/ensure-vectorize.mjs   # same first half as `npm run deploy`
 npx wrangler deploy --env="" --secrets-file .secrets/prod.env
 ```
 
+Make sure `GEMINI_API_KEY` has a real value before this first deploy — for
+`--secrets-file`, an empty value still counts as "set", so the deploy would go
+green and AI calls would fail later.
+
 **Existing worker** (rotation, or any later re-set):
 
 ```bash
 set -a; source .secrets/prod.env; set +a
-for s in PAYLOAD_KEK CONTENT_HMAC_KEY MCP_READ_TOKEN MCP_PROPOSE_TOKEN ADMIN_TOKEN GEMINI_API_KEY; do
+# Required three — abort if any is empty:
+for s in PAYLOAD_KEK ADMIN_TOKEN GEMINI_API_KEY; do
   [ -n "${!s}" ] || { echo "ABORT: $s is empty — edit .secrets/prod.env, re-source, re-run"; break; }
   printf '%s' "${!s}" | npx wrangler secret put "$s" --env=""
+done
+# Optional three — set only when present in the file:
+for s in CONTENT_HMAC_KEY MCP_READ_TOKEN MCP_PROPOSE_TOKEN; do
+  [ -n "${!s}" ] && printf '%s' "${!s}" | npx wrangler secret put "$s" --env=""
 done
 ```
 
@@ -179,11 +196,11 @@ npm run deploy                            # = ensure-vectorize + wrangler deploy
 ```
 
 Deploys fail loudly with *"The following required secrets have not been set"*
-until the six secrets are on the worker — `secrets.required` working as
-intended (§3; on a fresh CLI account the first deploy must carry them via
-`--secrets-file`, or deploy through the dashboard, which pre-creates the
-worker). Every deploy also re-checks (and provisions, when missing) the
-Vectorize index before uploading.
+until the required secrets are on the worker — `secrets.required` working as
+intended (§3 — three by default; on a fresh CLI account the first deploy must
+carry them via `--secrets-file`, or deploy through the dashboard, which
+pre-creates the worker). Every deploy also re-checks (and provisions, when
+missing) the Vectorize index before uploading.
 
 **Never `wrangler deploy --env prod`.** `wrangler.jsonc` carries inert
 `env` stubs for future staging/prod isolation, but env blocks do **not** inherit
@@ -194,9 +211,9 @@ deploy ships a worker with zero bindings whose endpoints all fail. Plain
 the same reason.
 
 - Crons and observability activate from `wrangler.jsonc` automatically (4 of the 5 free cron slots).
-- `secrets.required` makes a deploy **fail loudly** if any of the six secrets is
-  missing. If one goes missing later (deleted by hand), the symptom is every
-  authenticated route 401ing.
+- `secrets.required` makes a deploy **fail loudly** if a required secret is
+  missing (`PAYLOAD_KEK`, `ADMIN_TOKEN`, `GEMINI_API_KEY`). If one goes missing
+  later (deleted by hand), the symptom is every authenticated route 401ing.
 - CI (§6), when connected, runs the test suite on push; the local gate above
   additionally type-checks — keep both green.
 
@@ -234,11 +251,11 @@ exactly these values:
 | Enable Preview builds | **turn OFF** — previews would run against the same prod D1/R2; there is no preview isolation yet. |
 | Protect with Cloudflare Access | leave OFF — the worker authenticates with its own tokens. |
 
-Click **Deploy**. If the six secrets are not set yet, the first build fails
+Click **Deploy**. If the required secrets are not set yet, the first build fails
 loudly at the deploy step with *"The following required secrets have not been
-set"* — by design (`secrets.required`): set the six secrets, then re-run the
-build. The failed run still creates D1 `brain-db`, R2 `brain-raw` and the
-Vectorize index (observed on a fresh account 2026-10-17) — the retry reuses
+set"* — by design (`secrets.required`): set them (§3 — three by default), then
+re-run the build. The failed run still creates D1 `brain-db`, R2 `brain-raw` and
+the Vectorize index (observed on a fresh account 2026-10-17) — the retry reuses
 them. Every later push to `master` runs the same pipeline.
 
 **B. Existing worker** — dashboard → *Workers & Pages* → `brain-api` →
@@ -298,6 +315,11 @@ tools list but refuse with `MCP_PROPOSE scope required`. `brain-propose`
 every session would carry write scope by default. The plugin additionally uses
 its propose token for `/v1/events/batch` capture ingest.
 
+**Minimal setup (no `MCP_*` tokens on the worker):** put `ADMIN_TOKEN` in the
+plugin `token` and in both MCP `Authorization` headers. The admin token covers
+every scope — the dedicated tokens exist to scope clients *down*, and can be
+added later without touching the worker or this config.
+
 After saving, MCP servers hot-reload; the plugin loads on the next session
 start. Diagnostics land in `/tmp/opencode/brain-capture-diag.log` (`ingest_ok`
 lines; plugin console output is invisible in server logs).
@@ -354,7 +376,7 @@ curl -s -X POST https://<worker>/v1/proposals/<id>/apply \
 | Symptom | Likely cause | Fix |
 | --- | --- | --- |
 | Every authenticated route 401s | a secret is missing/different on the worker | `npx wrangler secret list`; re-put; deploys should have failed via `secrets.required` |
-| First deploy stops with "The following required secrets have not been set" | secrets not set yet — by design | add the six (README step 3 / §3), then **Retry deployment** |
+| First deploy stops with "The following required secrets have not been set" | secrets not set yet — by design | add the required secrets (README step 3 / §3 — three by default), then **Retry deployment** |
 | Deploy fails with error `10159` (Vectorize) | build token could not create/see `brain-memory` | create it in the dashboard (768, cosine + metadata indexes) and retry |
 | `503 server not ready: schema bootstrap failed` | the first-request schema bootstrap hit a D1 error | check `wrangler tail` — the log names the failing migration; it retries on the next request. Persistent failure on a hand-made schema: reconcile with `npx wrangler d1 migrations apply brain-db --remote` |
 | Worker runs but D1/R2 calls fail, bindings undefined | deployed with `--env prod` | redeploy with `npm run deploy` |
