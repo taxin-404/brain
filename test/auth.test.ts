@@ -31,6 +31,18 @@ describe("auth + health", () => {
     expect((await call("GET", "/v1/health-report", undefined, bearer(env, "MCP_PROPOSE"))).status).toBe(403);
   });
 
+  it("minimal setups: with the scoped tokens unset, the admin token is the credential", async () => {
+    const original = { MCP_READ_TOKEN: env.MCP_READ_TOKEN, MCP_PROPOSE_TOKEN: env.MCP_PROPOSE_TOKEN };
+    try {
+      setEnvVars({ MCP_READ_TOKEN: undefined, MCP_PROPOSE_TOKEN: undefined });
+      expect((await call("GET", "/v1/health-report", undefined, bearer(env, "ADMIN"))).status).toBe(200);
+      // the old hazard must stay closed in this mode too
+      expect((await call("GET", "/v1/health-report", undefined, { authorization: "Bearer undefined" })).status).toBe(401);
+    } finally {
+      setEnvVars(original);
+    }
+  });
+
   it("returns the health report shape with live counts", async () => {
     await env.BRAIN_DB.prepare(
       `INSERT INTO events (id, ts, ingested_at, source, actor, trust, kind, excerpt, content_hmac)

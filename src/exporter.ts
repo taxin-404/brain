@@ -1,5 +1,5 @@
 import { writeAudit } from "./audit";
-import { contentHmac, decryptPayloadWithKek, newEventId, payloadKek } from "./crypto";
+import { contentHmac, contentSigningSecret, decryptPayloadWithKek, newEventId, payloadKek } from "./crypto";
 import type { Env } from "./env";
 import { json } from "./http";
 import { consumeConfirmToken, PurgeError } from "./purge";
@@ -125,7 +125,7 @@ const readMeta = async (env: Env, job: string): Promise<ExportMeta | null> => {
 };
 
 const exportView = async (env: Env, job: string, meta: ExportMeta): Promise<ExportJobView> => {
-  const token = await exportLinkToken(env.CONTENT_HMAC_KEY, job, meta.exp);
+  const token = await exportLinkToken(await contentSigningSecret(env.PAYLOAD_KEK, env.CONTENT_HMAC_KEY), job, meta.exp);
   return {
     job,
     profile: meta.profile,
@@ -546,7 +546,7 @@ export async function handleExportDownload(env: Env, job: string, url: URL): Pro
   const exp = Number(url.searchParams.get("exp"));
   const token = url.searchParams.get("token") ?? "";
   if (!Number.isFinite(exp) || exp < Date.now()) return json({ error: "expired" }, 403);
-  const expected = await exportLinkToken(env.CONTENT_HMAC_KEY, job, exp);
+  const expected = await exportLinkToken(await contentSigningSecret(env.PAYLOAD_KEK, env.CONTENT_HMAC_KEY), job, exp);
   if (!constantTimeEqual(token, expected)) return json({ error: "forbidden" }, 403);
 
   const metaObj = await env.BRAIN_RAW.get(metaKey(job));

@@ -94,6 +94,22 @@ export async function contentHmac(secret: string, body: string): Promise<string>
     .join("");
 }
 
+/** The content-signing secret: `CONTENT_HMAC_KEY` when set, otherwise derived
+ *  from the KEK (HMAC-SHA256, domain-separated label) so a minimal setup needs
+ *  a single crypto secret. Deterministic per KEK — content keys and export
+ *  links stay stable across restarts. Setting `CONTENT_HMAC_KEY` later changes
+ *  content keys, so pick one arrangement once. */
+export async function contentSigningSecret(kekSecret: string, hmacSecret?: string): Promise<string> {
+  if (hmacSecret) return hmacSecret;
+  const key = await crypto.subtle.importKey("raw", enc.encode(kekSecret), { name: "HMAC", hash: "SHA-256" }, false, [
+    "sign",
+  ]);
+  const sig = await crypto.subtle.sign("HMAC", key, enc.encode("brain/content-hmac/v1"));
+  return Array.from(new Uint8Array(sig))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
 const CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 
 /** ULID: 48-bit ms timestamp (10 chars) + 80 random bits (16 chars), Crockford base32. */

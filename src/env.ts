@@ -8,9 +8,16 @@ export interface Env {
   BRAIN_RAW: R2Bucket;
   VECTORIZE: VectorizeIndex;
   PAYLOAD_KEK: string;
-  CONTENT_HMAC_KEY: string;
-  MCP_READ_TOKEN: string;
-  MCP_PROPOSE_TOKEN: string;
+  /** Optional: unset = derived from `PAYLOAD_KEK` (domain-separated HMAC). Set it
+   *  to decouple signing from the KEK; adding it later changes content keys and
+   *  export links, so pick one arrangement once. */
+  CONTENT_HMAC_KEY?: string;
+  /** Optional: read scope. Unset = reads authenticate with `ADMIN_TOKEN`; set it
+   *  to hand clients (opencode, the recall MCP) a read-only credential. */
+  MCP_READ_TOKEN?: string;
+  /** Optional: propose scope. Unset = writes authenticate with `ADMIN_TOKEN`; set
+   *  it (distinct from the read token) to scope the capture path down. */
+  MCP_PROPOSE_TOKEN?: string;
   ADMIN_TOKEN: string;
   AI_GATEWAY_BASE?: string;
   GEMINI_API_KEY: string;

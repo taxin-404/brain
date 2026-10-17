@@ -4,7 +4,7 @@ import { decryptPayload } from "../src/crypto";
 import { readBudget } from "../src/budget";
 import type { EventInput } from "../src/ingest";
 import { ingestEvents } from "../src/ingest";
-import { bearer, call } from "./helpers";
+import { bearer, call, setEnvVars } from "./helpers";
 
 // Shared-state adaptation (plugin 1.4.2 has no per-test isolation):
 // - the idempotency test uses its own sessions (sess-idem*) so its payloads
@@ -44,6 +44,25 @@ describe("ingest", () => {
     const row = await env.BRAIN_DB.prepare(`SELECT privacy, excerpt FROM events WHERE id = ?1`).bind(id).first<{ privacy: string; excerpt: string }>();
     expect(row!.privacy).toBe("sensitive");
     expect(row!.excerpt).not.toContain(secret);
+  });
+
+  it("works with CONTENT_HMAC_KEY unset (signing secret derived from the KEK)", async () => {
+    const original = env.CONTENT_HMAC_KEY;
+    try {
+      setEnvVars({ CONTENT_HMAC_KEY: undefined });
+      expect((await post(ev({ session_id: "sess-derived-hmac", payload: { text: "derived signing key" } }))).status).toBe(201);
+      const row = await env.BRAIN_DB
+        .prepare(`SELECT content_hmac FROM events WHERE session_id = 'sess-derived-hmac' LIMIT 1`)
+        .first<{ content_hmac: string }>();
+      expect(row!.content_hmac).toMatch(/^[0-9a-f]{64}$/);
+      // session+hmac dedupe still holds → derivation is deterministic within the KEK
+      const again = await post(ev({ session_id: "sess-derived-hmac", payload: { text: "derived signing key" } }));
+      const out = await again.json<{ results: Array<{ status: string }>; stored: number }>();
+      expect(out.stored).toBe(0);
+      expect(out.results[0].status).toBe("duplicate");
+    } finally {
+      setEnvVars({ CONTENT_HMAC_KEY: original });
+    }
   });
 
   it("is idempotent by id and by session+hmac, and charges the budget once", async () => {

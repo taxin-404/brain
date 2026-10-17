@@ -1,7 +1,7 @@
 import type { Env, Scope } from "./env";
 import { TRUST } from "./env";
 import { charge } from "./budget";
-import { contentHmac, encryptPayload, newEventId } from "./crypto";
+import { contentHmac, contentSigningSecret, encryptPayload, newEventId } from "./crypto";
 import { buildExcerpt, redactPayload, redactText } from "./redact";
 import { json } from "./http";
 
@@ -110,7 +110,7 @@ export async function ingestEvents(env: Env, scope: Scope, entries: EventInput[]
 
   for (const entry of entries) {
     const { fields: p, redactedBody } = prepareEntry(entry);
-    const hmac = await contentHmac(env.CONTENT_HMAC_KEY, redactedBody);
+    const hmac = await contentHmac(await contentSigningSecret(env.PAYLOAD_KEK, env.CONTENT_HMAC_KEY), redactedBody);
 
     // Dedupe BEFORE any charge or write (by id, by (session_id, hmac), within-batch).
     const sessionKey = p.sessionId === null ? null : `${p.sessionId}\u0000${hmac}`;

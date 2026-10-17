@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { contentHmac, decryptPayload, encryptPayload, newEventId } from "../src/crypto";
+import { contentHmac, contentSigningSecret, decryptPayload, encryptPayload, newEventId } from "../src/crypto";
 
 describe("crypto", () => {
   it("round-trips a payload", async () => {
@@ -25,6 +25,15 @@ describe("crypto", () => {
     expect(await contentHmac("other-key", '{"a":1}')).not.toBe(h1);
     expect(await contentHmac("hmac-key", '{"a":2}')).not.toBe(h1);
     expect(h1).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it("derives the content-signing secret from the KEK when CONTENT_HMAC_KEY is unset", async () => {
+    const a = await contentSigningSecret("kek-1");
+    expect(await contentSigningSecret("kek-1")).toBe(a); // deterministic per KEK
+    expect(await contentSigningSecret("kek-2")).not.toBe(a); // keyed by the KEK
+    expect(a).not.toBe("kek-1"); // never the raw KEK itself
+    expect(a).toMatch(/^[0-9a-f]{64}$/);
+    expect(await contentSigningSecret("kek-1", "explicit")).toBe("explicit"); // explicit wins
   });
 
   it("newEventId returns unique ULIDs", () => {

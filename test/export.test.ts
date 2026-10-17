@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 import { describe, expect, it, vi } from "vitest";
-import { contentHmac, decryptPayload } from "../src/crypto";
+import { contentHmac, contentSigningSecret, decryptPayload } from "../src/crypto";
 import { ingestEvents, type EventInput } from "../src/ingest";
 import { runSweep } from "../src/sweep";
 import { bearer, call } from "./helpers";
@@ -92,7 +92,10 @@ describe("export — backup profile", () => {
     expect((await call("GET", `/v1/export/${job}/download?exp=${body.expires_at}&token=deadbeef`)).status).toBe(403);
 
     const past = Date.now() - 1000;
-    const expiredToken = await contentHmac(env.CONTENT_HMAC_KEY, `export:${job}:${past}`);
+    const expiredToken = await contentHmac(
+      await contentSigningSecret(env.PAYLOAD_KEK, env.CONTENT_HMAC_KEY),
+      `export:${job}:${past}`,
+    );
     expect((await call("GET", `/v1/export/${job}/download?exp=${past}&token=${expiredToken}`)).status).toBe(403);
 
     expect((await call("GET", `/v1/export/${job}/download?exp=${body.expires_at}&token=nope`)).status).toBe(403);

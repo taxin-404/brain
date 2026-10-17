@@ -12,7 +12,7 @@ CREATE TABLE events (
   importance REAL NOT NULL DEFAULT 0.5,
   excerpt TEXT,                   -- redacted, ≤500 chars; feeds FTS5 (raw payload never indexed);
                                   -- NULL after purge
-  content_hmac TEXT NOT NULL,     -- HMAC(CONTENT_HMAC_KEY, redacted payload); keyed dedupe/integrity
+  content_hmac TEXT NOT NULL,     -- HMAC(signing secret, redacted payload); keyed dedupe/integrity. Secret = CONTENT_HMAC_KEY when set, else KEK-derived
   redacted INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX idx_events_session ON events(session_id, ts);
