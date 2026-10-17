@@ -290,18 +290,21 @@ live.
 - **Fork-safe config:** `wrangler.jsonc` carries no `database_id` (the D1
   binding auto-provisions `brain-db` by name on a fresh account and re-links on
   existing ones — probe battery 2026-10-16) and no owner-specific vars
-  (`AI_GATEWAY_BASE` is a secret now). Fresh-account dashboard run 2026-10-17:
-  the failing first deploy (missing secrets) already provisions D1 `brain-db`,
-  R2 `brain-raw` and the Vectorize index; the retry reuses everything. A fresh
-  **CLI** account differs — wrangler's `workerExists=false` branch throws before
-  upload (only the Vectorize index exists) and directs to `--secrets-file`.
+  (`AI_GATEWAY_BASE` is a secret now). Fresh-account run 2026-10-17: the first
+  deploy provisions D1 `brain-db`, R2 `brain-raw` and the Vectorize index. A
+  fresh **CLI** account works the same now that the deploy-time secret gate is
+  gone — `--secrets-file` is no longer needed (deploy first, then `secret put`).
 - **Secrets survive deploys** (worker-level, never touched by a deploy):
-  required are `PAYLOAD_KEK`, `ADMIN_TOKEN`, `GEMINI_API_KEY`; optional with
-  working defaults are `CONTENT_HMAC_KEY`, `MCP_READ_TOKEN`, `MCP_PROPOSE_TOKEN`
-  (+ `AI_GATEWAY_BASE`). `secrets.required` in `wrangler.jsonc` makes a deploy
-  *fail loudly* if a required secret is missing — the fork flow leans on this
-  (red first build → paste three values → **Retry deployment**). Symptom of one
-  deleted later: every authenticated route 401s.
+  needed are `PAYLOAD_KEK`, `ADMIN_TOKEN` (+ an AI key for extraction); optional
+  with working defaults are `CONTENT_HMAC_KEY`, `MCP_READ_TOKEN`,
+  `MCP_PROPOSE_TOKEN` (+ `AI_GATEWAY_BASE`).
+- **No deploy-time secret gate** (2026-10-17, replaced `secrets.required`):
+  deploys always go green. Until `PAYLOAD_KEK` and `ADMIN_TOKEN` are non-empty,
+  every route answers 503 `{"error":"not configured","missing":[…]}` (crons skip
+  with a log line) — readable with zero credentials at `/v1/health-report`,
+  which is the fork-flow discovery step. The AI key is a hint in that response,
+  never a gate (non-Google setups need no Gemini key). Broken-secret symptom
+  once configured: every authenticated route 401s.
 - **Default-minimal secrets** (2026-10-17): unset `CONTENT_HMAC_KEY` ⇒ the
   signing secret is derived from `PAYLOAD_KEK` (`contentSigningSecret`,
   domain-separated HMAC — deterministic, so content keys/export links stay

@@ -25,9 +25,10 @@ Known and by design — not vulnerabilities:
 
 - The worker is single-owner: the admin token can do everything, on purpose.
 - The `dev-*` tokens and `dev-kek`/`dev-hmac` values in `vitest.config.ts`
-  are intentionally public and local-only. `secrets.required` in
-  `wrangler.jsonc` makes a production deploy fail loudly when real secrets
-  are missing.
+  are intentionally public and local-only. A production worker with missing
+  real secrets never serves or stores data: until `PAYLOAD_KEK` and
+  `ADMIN_TOKEN` are set it answers 503 `not configured` and skips schema
+  bootstrap and crons.
 - The free-tier AI provider may use non-`restricted` content to improve its
   products (documented in `docs/engineering.md` and the setup guide);
   `restricted` events never leave the system.

@@ -67,9 +67,9 @@ No terminal, no file editing — a few minutes in your browser.
 
 1. **Fork** this repository, then grab a free [Google AI Studio](https://aistudio.google.com) API key.
 
-2. In **Workers & Pages → Create → Continue with GitHub**, select your fork and set: name `brain-api` (the dashboard pre-fills the repo name `brain` — change it to match `wrangler.jsonc`), build command `npm ci && npm test`, deploy command `npm run deploy`, and **turn OFF preview builds**. Click **Deploy**. The first run provisions D1 `brain-db`, R2 `brain-raw` and the Vectorize index `brain-memory` into *your* account, then stops on the missing secrets (step 3 — by design; nothing is lost, the retry reuses it all). The database schema applies on the first request.
+2. In **Workers & Pages → Create → Continue with GitHub**, select your fork and set: name `brain-api` (the dashboard pre-fills the repo name `brain` — change it to match `wrangler.jsonc`), build command `npm ci && npm test`, deploy command `npm run deploy`, and **turn OFF preview builds**. Click **Deploy**. The first run goes green and provisions D1 `brain-db`, R2 `brain-raw` and the Vectorize index `brain-memory` into *your* account — no secrets needed for it, and nothing ever blocks on them. The database schema applies on the first configured request.
 
-3. The first deploy stops with *"The following required secrets have not been set: …"* — on purpose. Add the **three required values** from [The envs](#the-envs) below under the Worker → **Settings → Variables and Secrets** (the other three secrets there are optional hardening), then hit **Retry deployment**.
+3. Pick the missing values straight from the worker: `GET <worker-url>/v1/health-report` answers `503 {"error":"not configured","missing":[…]}` — no credentials needed — until the secrets are set. Add the three required values from [The envs](#the-envs) below under the Worker → **Settings → Variables and Secrets** (the other three there are optional hardening); the next request is live.
 
 4. `GET <worker-url>/v1/health-report` with your `ADMIN_TOKEN` — a fresh install answers with zeros. Then wire up OpenCode (see [docs/setup.md](./docs/setup.md) §7).
 
@@ -79,7 +79,7 @@ No terminal, no file editing — a few minutes in your browser.
 
 ### The envs
 
-Everything the worker reads. Three secrets are required (what step 3 sets) — the optional rows default to something sensible:
+Everything the worker reads. Three secrets are required (what step 3 sets) — deploys don't block on them; the worker itself lists any that are missing. The optional rows default to something sensible:
 
 | Name | Set where | Value |
 | --- | --- | --- |
@@ -108,7 +108,7 @@ No format requirements on the random strings — your password manager's generat
 | `AI_EMBED_DIMS` | dashboard variable, *optional* | embedding size 1–1536 (default 768); must match your Vectorize index |
 
 - **Nothing to do by default** — with no `AI_*` set, everything runs on Gemini exactly as before.
-- **To switch providers**, set the `AI_*` values in the dashboard; for a fully non-Google setup also delete `GEMINI_API_KEY` from `secrets.required` in `wrangler.jsonc` (one line) — or keep the key and pin `AI_EMBED_BASE_URL=native`.
+- **To switch providers**, set the `AI_*` values in the dashboard; for a fully non-Google setup just leave `GEMINI_API_KEY` unset — nothing blocks on it (AI misconfiguration shows up in the health report, not as deploy errors).
 - **Changing the embedding model or size** re-embeds the stored backlog in the background over the next sweeps, and your prompts go only to the provider you configure.
 
 > [!TIP]
@@ -120,8 +120,8 @@ No format requirements on the random strings — your password manager's generat
 
 ## FAQ
 
-- **Why did my first deploy fail with "The following required secrets have not been set"?**
-  On purpose: `secrets.required` keeps a half-configured worker from serving traffic. Add the required secrets (step 3 — three values by default), then **Retry deployment**.
+- **The worker answers `503 not configured` — what now?**
+  It names exactly what's missing (`missing: […]`). Add those values under Worker → Settings → Variables and Secrets; deployments never block on secrets — the worker reports them itself until they exist.
 
 - **The build failed at the deploy step with error 10159 — what now?**
   Your build token could not create the `brain-memory` index. Create it in the dashboard — Vectorize → **Create index** → `brain-memory`, 768 dims, cosine, metadata indexes `type`/`status`/`sensitivity` (string) — then **Retry deployment**.
@@ -163,16 +163,16 @@ cd brain
 npm ci
 npx wrangler login
 
-# 1. secrets — generate + escrow (exact snippet in docs/setup.md §3).
-#    Fresh account: there is no worker yet, so `secret put` is rejected —
-#    the first deploy carries them via --secrets-file (wrangler's own advice):
-node scripts/ensure-vectorize.mjs
-npx wrangler deploy --env="" --secrets-file .secrets/prod.env
-
-# 2. deploy again — normal from here on (secrets are worker-level).
-#    D1 brain-db + R2 brain-raw already exist from step 1; the schema applies
-#    on the first request.
+# 1. deploy first — green on a fresh account, no secrets required for it.
+#    Provisions D1 brain-db, R2 brain-raw and the Vectorize index; the worker
+#    answers 503 `not configured` (with the missing names) until step 2.
 npm run deploy
+
+# 2. secrets — generate + escrow (exact snippet in docs/setup.md §3), then:
+set -a; source .secrets/prod.env; set +a
+for s in PAYLOAD_KEK ADMIN_TOKEN GEMINI_API_KEY; do
+  printf '%s' "${!s}" | npx wrangler secret put "$s" --env=""
+done
 ```
 
 Full walkthrough with every gotcha: [docs/setup.md](./docs/setup.md).

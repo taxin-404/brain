@@ -53,10 +53,10 @@ up; prod resources verified untouched. Full detail:
   `10053` while any plain-text binding of that name is live — so prod dropped
   the var with a one-off `keep_vars:false` deploy, then `secret put` succeeded.
   The direct-Google fallback covered the (short) window.
-- Keep `secrets.required` and the `--env=""` deploy semantics. The red first
-  build (`The following required secrets have not been set: …`) is the deliberate, documented fork step:
-  paste the required secrets in **Settings → Variables and Secrets** (three by
-  default since amendment 7), click **Retry deployment**.
+- Keep the `--env=""` deploy semantics. `secrets.required` shipped as the
+  deliberate red first build, then was removed the same day (amendment 8):
+  deploys always go green and the worker reports missing
+  `PAYLOAD_KEK`/`ADMIN_TOKEN` itself (503 `not configured`).
 
 ### 2. Runtime schema bootstrap — `src/bootstrap.ts`
 
@@ -144,9 +144,10 @@ match — otherwise `Bearer undefined` would be an admin.)
 Owner directive: fewer envs to remember — the fork default must be the smallest
 set that still works, with the rest available as opt-in hardening.
 
-- `secrets.required` → `PAYLOAD_KEK`, `ADMIN_TOKEN`, `GEMINI_API_KEY` (down
-  from six). The red first build names three values; the other three are
-  optional (dashboard + `.secrets/prod.env` only when wanted).
+- `secrets.required` briefly dropped to `PAYLOAD_KEK`, `ADMIN_TOKEN`,
+  `GEMINI_API_KEY` (down from six), then the deploy-time gate was removed
+  entirely the same day (amendment 8). The other three are optional (dashboard
+  + `.secrets/prod.env` only when wanted).
 - `CONTENT_HMAC_KEY` unset ⇒ signing secret derived from the KEK
   (`contentSigningSecret`: HMAC-SHA256(KEK, `"brain/content-hmac/v1"`) —
   domain-separated and deterministic, so per-event content keys and export
@@ -163,6 +164,27 @@ set that still works, with the rest available as opt-in hardening.
   derivation unit (RED→GREEN), minimal-env auth pin, ingest dedupe under the
   derived secret, export fixture re-derived through the helper.
 
+### 8. No deploy-time secret gate (amendment, 2026-10-17)
+
+Owner directive: make post-fork setup even easier ("set empty envs on
+deployment"). Shipping literally empty secret values was rejected — an empty
+`PAYLOAD_KEK` encrypts under a guessable key, and empty plain-text vars would
+later block `secret put` (the 10053 trap). Instead the gate itself is gone:
+
+- `wrangler.jsonc` drops `secrets.required`; every deploy goes green on a fresh
+  account (D1/R2/Vectorize provision as before) and `--secrets-file` is no
+  longer needed on the CLI path — deploy first, then `secret put` (the worker
+  now exists).
+- Runtime gate instead: until `PAYLOAD_KEK` and `ADMIN_TOKEN` are non-empty,
+  every route answers `503 {"error":"not configured","missing":[…]}` (no
+  credentials needed) and crons skip with a log line; the AI key appears as a
+  hint in that response, never a gate (non-Google setups need no Gemini key).
+  Configured workers — prod included — behave exactly as before.
+- Tests: `test/config.test.ts` (503 shape and no-credential readability,
+  empty-string counts, AI-not-a-gate, cron skip); the auth unset-token test now
+  asserts the 503 *and* unit-pins the `resolveScope` guard directly. Gate:
+  291 green + tsc.
+
 ## Verification
 
 1. Per commit: full `npx vitest run` + `npx tsc --noEmit`.
@@ -178,7 +200,7 @@ set that still works, with the rest available as opt-in hardening.
    `GET /v1/health-report` + `GET /v1/search` smoke; AI wiring still native via
    the gateway.
 5. Fresh-account end-to-end (owner action): new free account → fork connect →
-   red build → required secrets (three by default) → Retry → zeros health; pin
+   green first build → 503 checklist → set required secrets → zeros health; pin
    the dashboard delete-flow wording; document.
 
 ## Risks / rollback

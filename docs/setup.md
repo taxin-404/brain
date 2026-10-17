@@ -123,10 +123,10 @@ embeddings can each run on any OpenAI-compatible API — set `AI_BASE_URL` +
 `AI_MODEL` (+ `AI_API_KEY`; keyless works) for chat, and `AI_EMBED_BASE_URL` /
 `AI_EMBED_MODEL` / `AI_EMBED_DIMS` for embeddings (`AI_EMBED_BASE_URL=native`
 keeps Gemini embeddings). With no `AI_*` set, everything runs on Gemini exactly
-as before. For a fully non-Google setup, also drop `GEMINI_API_KEY` from
-`secrets.required` in `wrangler.jsonc`. Changing the embedding model or size
-re-embeds stored facts in the background over the next sweeps. Full table:
-README → *The envs*.
+as before. For a fully non-Google setup just leave `GEMINI_API_KEY` unset —
+nothing blocks on it (there is no deploy-time secret gate). Changing the
+embedding model or size re-embeds stored facts in the background over the next
+sweeps. Full table: README → *The envs*.
 
 ```bash
 # 1. Generate the required values into .secrets/prod.env (gitignored via .secrets/).
@@ -147,26 +147,17 @@ else
   #  are set in the dashboard — see "Optional: non-Google AI provider" above.)
 fi
 
-# 2. Escrow the file in your password manager FIRST (see below) — then get the
-#    secrets onto the worker. The route depends on whether the worker exists
-#    yet; see the two variants right below this block.
+# 2. Escrow the file in your password manager FIRST (see below) — then deploy
+#    and set the secrets; deploys never block on secrets (the worker answers
+#    503 `not configured` naming them until they exist).
 ```
 
-**Fresh account — no worker yet.** `wrangler secret put` needs an existing
-worker; the first deploy carries the secrets via `--secrets-file`:
+**Deploy first, set secrets second.** `wrangler secret put` needs the worker to
+exist, and deploys never block on secrets — so a fresh account (or a re-set
+after rotation) is one sequence:
 
 ```bash
-node scripts/ensure-vectorize.mjs   # same first half as `npm run deploy`
-npx wrangler deploy --env="" --secrets-file .secrets/prod.env
-```
-
-Make sure `GEMINI_API_KEY` has a real value before this first deploy — for
-`--secrets-file`, an empty value still counts as "set", so the deploy would go
-green and AI calls would fail later.
-
-**Existing worker** (rotation, or any later re-set):
-
-```bash
+npm run deploy   # green on a fresh account; provisions D1, R2 and the Vectorize index
 set -a; source .secrets/prod.env; set +a
 # Required three — abort if any is empty:
 for s in PAYLOAD_KEK ADMIN_TOKEN GEMINI_API_KEY; do
@@ -178,6 +169,11 @@ for s in CONTENT_HMAC_KEY MCP_READ_TOKEN MCP_PROPOSE_TOKEN; do
   [ -n "${!s}" ] && printf '%s' "${!s}" | npx wrangler secret put "$s" --env=""
 done
 ```
+
+Between the deploy and the `put`s, `GET <worker>/v1/health-report` answers
+`503 {"error":"not configured","missing":[…]}` with no credentials — that list
+is the checklist. Re-run the same loop any time to re-set or rotate values (no
+redeploy needed).
 
 - **Escrow before step 2.** `PAYLOAD_KEK` is irreplaceable: lose it (without
   escrow) and every stored payload is unreadable forever — that is what
@@ -195,12 +191,10 @@ npm ci && npm test && npx tsc --noEmit    # local gate — green before any depl
 npm run deploy                            # = ensure-vectorize + wrangler deploy --env=""
 ```
 
-Deploys fail loudly with *"The following required secrets have not been set"*
-until the required secrets are on the worker — `secrets.required` working as
-intended (§3 — three by default; on a fresh CLI account the first deploy must
-carry them via `--secrets-file`, or deploy through the dashboard, which
-pre-creates the worker). Every deploy also re-checks (and provisions, when
-missing) the Vectorize index before uploading.
+Deploys never block on secrets: a worker without them deploys green and reports
+what is missing itself — `503 {"error":"not configured","missing":[…]}`,
+readable with no credentials (§3). Every deploy also re-checks (and provisions,
+when missing) the Vectorize index before uploading.
 
 **Never `wrangler deploy --env prod`.** `wrangler.jsonc` carries inert
 `env` stubs for future staging/prod isolation, but env blocks do **not** inherit
@@ -211,9 +205,9 @@ deploy ships a worker with zero bindings whose endpoints all fail. Plain
 the same reason.
 
 - Crons and observability activate from `wrangler.jsonc` automatically (4 of the 5 free cron slots).
-- `secrets.required` makes a deploy **fail loudly** if a required secret is
-  missing (`PAYLOAD_KEK`, `ADMIN_TOKEN`, `GEMINI_API_KEY`). If one goes missing
-  later (deleted by hand), the symptom is every authenticated route 401ing.
+- Missing secrets never fail a deploy — the worker reports them (503
+  `not configured`, §3). If one is deleted later, the same 503 appears; if only
+  a token value drifts from what a client sends, the symptom is 401s.
 - CI (§6), when connected, runs the test suite on push; the local gate above
   additionally type-checks — keep both green.
 
@@ -224,8 +218,10 @@ set -a; source .secrets/prod.env; set +a   # defines $ADMIN_TOKEN
 curl -s https://<worker>/v1/health-report -H "Authorization: Bearer $ADMIN_TOKEN"
 ```
 
-A fresh install answers with zeros (`events: 0`, `budget.used: 0`, no
-consolidation run yet). `wrangler tail` is the live log path. The Workers
+Before the secrets are set this answers `503 {"error":"not configured",
+"missing":[…]}` — no credentials needed for that one response, and it is the
+checklist. Once set, a fresh install answers with zeros (`events: 0`,
+`budget.used: 0`, no consolidation run yet). `wrangler tail` is the live log path. The Workers
 Observability telemetry API is optional and needs a token with `Workers
 Observability Write` (it 403s without one) — nothing in setup requires it;
 `wrangler tail` + the health report cover normal ops.
@@ -251,12 +247,10 @@ exactly these values:
 | Enable Preview builds | **turn OFF** — previews would run against the same prod D1/R2; there is no preview isolation yet. |
 | Protect with Cloudflare Access | leave OFF — the worker authenticates with its own tokens. |
 
-Click **Deploy**. If the required secrets are not set yet, the first build fails
-loudly at the deploy step with *"The following required secrets have not been
-set"* — by design (`secrets.required`): set them (§3 — three by default), then
-re-run the build. The failed run still creates D1 `brain-db`, R2 `brain-raw` and
-the Vectorize index (observed on a fresh account 2026-10-17) — the retry reuses
-them. Every later push to `master` runs the same pipeline.
+Click **Deploy**. The first build goes green even before secrets exist — it
+creates D1 `brain-db`, R2 `brain-raw` and the Vectorize index (observed on a
+fresh account 2026-10-17), and the worker answers 503 `not configured` until
+you set the secrets (§3). Every later push to `master` runs the same pipeline.
 
 **B. Existing worker** — dashboard → *Workers & Pages* → `brain-api` →
 *Settings* → *Builds* → connect the GitHub repo, production branch `master`,
@@ -375,8 +369,8 @@ curl -s -X POST https://<worker>/v1/proposals/<id>/apply \
 
 | Symptom | Likely cause | Fix |
 | --- | --- | --- |
-| Every authenticated route 401s | a secret is missing/different on the worker | `npx wrangler secret list`; re-put; deploys should have failed via `secrets.required` |
-| First deploy stops with "The following required secrets have not been set" | secrets not set yet — by design | add the required secrets (README step 3 / §3 — three by default), then **Retry deployment** |
+| Every authenticated route 401s | a token value on the worker differs from what the client sends | `npx wrangler secret list`; re-put with §3's loop |
+| `503 {"error":"not configured","missing":[…]}` | `PAYLOAD_KEK` / `ADMIN_TOKEN` not set yet | set the listed names (§3); the response is the checklist |
 | Deploy fails with error `10159` (Vectorize) | build token could not create/see `brain-memory` | create it in the dashboard (768, cosine + metadata indexes) and retry |
 | `503 server not ready: schema bootstrap failed` | the first-request schema bootstrap hit a D1 error | check `wrangler tail` — the log names the failing migration; it retries on the next request. Persistent failure on a hand-made schema: reconcile with `npx wrangler d1 migrations apply brain-db --remote` |
 | Worker runs but D1/R2 calls fail, bindings undefined | deployed with `--env prod` | redeploy with `npm run deploy` |
