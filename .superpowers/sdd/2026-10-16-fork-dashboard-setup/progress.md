@@ -165,3 +165,10 @@ Open item carried: fresh-account end-to-end test (owner creates account; connect
   token (live — prod builds on every push), Cloudflare Agent / Agent Token
   (session access). Verification push: this commit — expect prod build green
   AND tes1ing deploy in audit-logs within minutes.
+- 2026-10-17d verified: push `04befd3` (05:54:55Z). Prod build `6651e013`
+  → success in 1m53s (build_outcome success 05:56:49Z) — prod credential
+  survives the cleanup. NOTE: the prod build trigger's
+  `build_token_name` is "terabox build token" (Cloudflare naming quirk from
+  the 10-15 setup) — that token must be kept. Tes1ing: build-runner deploy +
+  schedules + subdomain at 05:58:10-11Z — its live token survived too. Both
+  accounts green end to end after cleanup. Cycle closed.
