@@ -60,7 +60,11 @@ async function applyPending(db: D1Database): Promise<void> {
       // A concurrent cold isolate may have applied it first; the atomic batch
       // rolled back here, so trust the bookkeeping row over the thrown error.
       const recorded = await db.prepare(SELECT_RECORDED).bind(migration.name).first<{ name: string }>();
-      if (!recorded) throw error;
+      if (!recorded) {
+        // Name the migration in the 503 log line — a partial hand-made schema
+        // is the classic cause here (see docs/setup.md §10).
+        throw new Error(`migration ${migration.name} failed: ${String(error)}`, { cause: error });
+      }
     }
   }
 }
