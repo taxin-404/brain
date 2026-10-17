@@ -59,6 +59,20 @@ changes that **you** review.
 - ✅ Browser — bundled read-only inspector page
 - ⚠️ Other agent platforms not verified yet — the HTTP API is plain Bearer/JSON
 
+### Agent skills — teach any runtime to use the brain
+
+Two installable [Agent Skills](https://agentskills.io) ship in this repo:
+
+- **`skills/brain-memory`** — the judgment layer: what to store now vs rely on
+  auto-capture, evidence-gated corrections, procedures need owner approval,
+  what never gets stored
+- **`skills/brain-connect`** — wiring any MCP client (OpenCode, Claude Code,
+  Cursor, Codex, Windsurf), token scoping (read / propose / admin),
+  auto-capture via `POST /v1/events/batch`
+
+Install into your runtimes: `npx skills add taxin-404/brain --skill '*' --global`
+(fork owners: point `npx skills add` at your fork).
+
 ---
 
 ## Visual quick deploy

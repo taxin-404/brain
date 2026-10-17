@@ -172,3 +172,24 @@ Open item carried: fresh-account end-to-end test (owner creates account; connect
   the 10-15 setup) — that token must be kept. Tes1ing: build-runner deploy +
   schedules + subdomain at 05:58:10-11Z — its live token survived too. Both
   accounts green end to end after cleanup. Cycle closed.
+- 2026-10-17e agent skills for all runtimes (owner plan #1 "skills for brain
+  MCP; make it for all AI agents"): two Agent Skills shipped at
+  skills/<name>/SKILL.md — `brain-memory` (judgment: instant vs auto layers,
+  evidence-gated corrections [auto-apply tier], forget/purge handling,
+  block-edit reservation, procedures owner-approval-by-design, never-store
+  rules, dedupe-before-write) and `brain-connect` (wire any MCP client:
+  /mcp streamable HTTP + Bearer, token scoping, per-agent snippets,
+  /v1/events/batch auto-capture for any runtime, health/unauthenticated
+  semantics, common-mistakes list). Content grounded in src/mcp.ts (8 tools,
+  scopes, tier copy) + plugin/src/capture.ts (CaptureEvent). Written
+  test-first per writing-skills protocol: RED baselines via fresh subagents —
+  memory baseline kept good instincts but MISSed evidence tiers and told a
+  wrong auto-capture story; connect baseline snippets were solid but
+  repo-blind. GREEN with skill injected: tiers, procedure path (c scenario
+  intentionally swapped to exercise propose_procedure), dedupe-first flows
+  and secret handling all held. REFACTOR: capture-schema guessing observed →
+  pinned to plugin/src/capture.ts; micro re-test showed the agent sourcing
+  the real schema. Word counts within reference-skill budget. Scope note:
+  OpenCode-only auto-capture plugin remains; universal capture is the HTTP
+  endpoint (documented). README "Agent skills" section + install command
+  added next commit.
