@@ -249,15 +249,6 @@ Full walkthrough with every gotcha: [docs/setup.md](./docs/setup.md).
 
 ---
 
-## Open donations
-
-`.github/FUNDING.yml` points at GitHub Sponsors for `@taxin-404` — the
-"Sponsor this project" button appears on the repo page once enrollment
-completes there. No third-party links are shipped as placeholders; adding
-ko-fi/PayPal/crypto later is a one-line change.
-
----
-
 ## Documentation
 
 [Setup](./docs/setup.md) · [REST recipes](./docs/rest-recipes.md) ·

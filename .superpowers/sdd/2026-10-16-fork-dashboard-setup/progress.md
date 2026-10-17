@@ -336,3 +336,15 @@ Open item carried: fresh-account end-to-end test (owner creates account; connect
   sections, seam prose read clean. No anchor links existed for the
   renamed headings (checked). Gate pair pre-commit; shell workdir
   quirk noted (workdir ignored twice — used explicit cd).
+- 2026-10-17o owner-decision: donations scaffolding removed from repo —
+  FUNDING.yml deleted (git rm), README "## Open donations" section dropped.
+  Owner's reason verbatim: "remove the donation, because i can setup it"
+  (they will handle Sponsors/setup personally when they choose). Verified
+  before deletion: only two touchpoints existed (file + README section);
+  zero code/test/script/mjs-ts references; CHANGELOG never mentioned it;
+  no upstream doc links. Restore recipe if ever wanted: FUNDING.yml is
+  `git show e2a866e:.github/FUNDING.yml` (one line: `github: taxin-404`
+  + comment header), README section read `## Open donations` + 4 lines
+  via `git show e2a866e:README.md`. Activation-when-not-enrolled was an
+  inert button — removing it also removes the "placeholder advertising"
+  smell we avoided for third-party links. Gate pair pre-commit.
