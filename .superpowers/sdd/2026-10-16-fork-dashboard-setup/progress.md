@@ -125,3 +125,34 @@ Open item carried: fresh-account end-to-end test (owner creates account; connect
   fork sync → Retry → **green with zero secrets** → 503 checklist → set three →
   200. Owner pending: run that on the fresh account; KEK escrow deletion still
   held.
+- 2026-10-17c fresh-account e2e COMPLETE (owner-driven, tes1ing account
+  d5d15d42e8e4fd5a159feb81ae38f036, renamed from testing-404 mid-run):
+  - First two attempts exposed a real-world failure mode the docs didn't
+    cover: dashboard plain-create (source `dash`, 04:24:51, then 04:49-04:50
+    recreate) ships a placeholder worker with zero bindings and no build
+    config (Builds API 12040) — audit-logs diagnosed via `cf` CLI. Fix pushed
+    to the owner: delete placeholder; create via **Continue with GitHub**
+    import path.
+  - Import attempt: build command green **291/291 (41 files)** but deploy
+    failed — `npm ruun deploy` typo in the dashboard deploy-command field.
+    Owner fixed the field; retry deployed green.
+  - Provisioning confirmed via cf: D1 `brain-db`, R2 `brain-raw`, Vectorize
+    `brain-memory` created by the deploy; secrets `[]` (amendment 8 working
+    as designed); `/health` (no auth) 503 `{"error":"not configured",
+    "missing":["PAYLOAD_KEK","ADMIN_TOKEN"],…}` — the self-checklist is the
+    envs instruction.
+  - Owner generated the pair themselves (openssl), escrowed locally at
+    /home/taxin/Work/.secrets/tes1ing.env (owner decision: NOT committed to
+    the repo — local-only per repo-wide escrow discipline; chat-paste of
+    test values accepted, prod values remain file→dashboard only). Set in
+    dashboard by owner.
+  - Verified: `/v1/health-report` no-auth = `unauthorized`; Bearer new
+    token = **200**. OpenCode client rewired to the test server
+    (mcp.brain, mcp.brain-propose, capture plugin → tes1ing URL +
+    ADMIN_TOKEN; backup opencode.json.bak-testing-20261017-113419;
+    restart needed to load). Prod untouched.
+  - Docs gap fixed from this run: `56c5838` — README + setup.md §3 now state
+    which values get reused by the AI client (store-before-paste narrative).
+  - Net status: the full fork story is now verified end to end on a fresh
+    account with **two** secrets and a worst-case first-run (wrong create
+    path + typo'd deploy command). No config changes required at any point.
