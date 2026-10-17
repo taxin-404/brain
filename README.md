@@ -75,6 +75,13 @@ Two installable [Agent Skills](https://agentskills.io) ship in this repo:
 Install into your runtimes: `npx skills add taxin-404/brain --skill '*' --global`
 (fork owners: point `npx skills add` at your fork).
 
+**Set up your machine without reading any of this:** paste
+[`prompts/setup-local.md`](prompts/setup-local.md) into your agent — it wires
+escrow, the two MCP entries, the skills, and optional capture into any
+runtime, stage by stage with live verification (tested end-to-end: escrow
+perms, config shape, install locations, write/dedupe probe). Pastes again
+after server changes re-run safely (check-if-done at every stage).
+
 ### Capture clients — not OpenCode-only
 
 Auto-capture works on any runtime: the bundled OpenCode plugin, a zero-dep

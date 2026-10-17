@@ -247,3 +247,23 @@ Open item carried: fresh-account end-to-end test (owner creates account; connect
   the proposal-created-equals-not-applied mistake entry pointing at rest-
   recipes admin verbs (the exact gap the urgency protocol solved on the
   memory side). Root deps intentionally left on vitest 4 until #4 is green.
+- 2026-10-17i agent-run setup prompt (owner plan #3 "prompt to set up the
+  local one — mcp, skills, etc, not the server"): prompts/setup-local.md —
+  paste-ready, runtime-agnostic (OpenCode/Claude Code/Cursor/Codex/generic),
+  8 stages: intake → escrow-first (600 perms, out-of-repo, store-before-
+  paste) → worker proof (200/401/503 fork map) → MCP two-entry disjoint-
+  scope wiring with backup+idempotency → skills install via npx skills add
+  → capture clients (plugin/claude-code shim/REST) → evidence suite
+  (health counters, MCP read probe, WRITE-PROBE + dedupe re-send with
+  permission ask, skills check, capture installed/declined) → close report
+  with re-run-instructions. Secret hygiene baked in (mask to prefix, never
+  print). TESTED end-to-end by a fresh subagent executing the prompt in a
+  sandboxed HOME=/tmp/opencode/prompt-e2e against the live tes1ing worker
+  (minimal-mode ADMIN_TOKEN routed to all three slots): all stages
+  artifact-verified — brain.env 600 in fake home, opencode.json exact
+  two-entry shape with correct /mcp URL, both skills installed under
+  fake ~/.agents/skills, write probe stored:1 → duplicate probe stored:0/
+  charged:0, budget +1 net. Subagent returned silent (no text) but its
+  artifacts prove the full pass — prompt changes needed: none after two
+  typo fixes pre-test (heredoc litter + garbled placeholder). README gains
+  the setup-paste pointer. Gate pair before commit this time.
