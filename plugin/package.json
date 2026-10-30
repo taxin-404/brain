@@ -9,7 +9,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@opencode/plugin": "^2.0.29"
+    "@opencode/plugin": "^2.1.4"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
